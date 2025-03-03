@@ -1,2 +1,0 @@
-@RestController -> Rest apiler için kullanılır
-@Controller -> MVC projeler için kullanılır

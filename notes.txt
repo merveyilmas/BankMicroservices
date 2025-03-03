@@ -1,0 +1,176 @@
+Springboot;
+@RestController -> Rest apiler için kullanılır
+@Controller -> MVC projeler için kullanılır
+
+Maven Commands;
+- mvn clean install
+- mvn spring-boot:run
+
+- java -jar target/accounts-0.0.1-SNAPSHOT.jar
+
+Docker Commands;
+- docker build . -t merveyilmas/accounts:s4
+(dockerfile olan dizinde dockerfile dan image oluşturur)
+- docker images
+(docker image leri listeler)
+- docker inspect image 6121
+(image id ye göre image bilgilerini listeler)
+
+- terminalden docker desktop a login olmak için; docker login -u merveyilmas
+
+- docker run -p 8080:8080 merveyilmas/accounts:s4 
+(image ı container içinde çalıştırır)
+- docker run -d -p 8080:8080 merveyilmas/accounts:s4
+(-d ile "detech" container ı arka planda çalıştırırız)
+(dışarıya açılan docker port : container içerisindeki proje çalışma portu)
+- docker ps
+(çalışan conatiner ları listeler)
+- docker ps -a
+(tüm container ları listeler)
+- docker start e0443edcb6ac0541e8ff46d1aa221660f755985d78ddc904ae50d7bc0c998a65
+(conatiner ıd ile container çalıştırır)
+
+- Dockerfile oluşturmak için buildpacks ve GoogleJib kullanabiliriz.
+
+BUILDPACKS:
+
+Dockerfile olmadan buildpacks ile image oluşturmak için;
+
+1. Packaging yöntemini ekle:
+<version>0.0.1-SNAPSHOT</version>
+<packaging>jar</packaging>
+
+2. Image name i ekle:
+<configuration>
+	<image>
+		<name>merveyilmas/${project.artifactId}:s4</name>
+	</image>
+	<excludes>
+		<exclude>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+		</exclude>
+	</excludes>
+</configuration>
+
+- <packaging> ve <image> i ilgili yerlere ekle pom.xml de
+- mvn spring-boot:build-image
+(maven ile image oluşturmak için bu komutu çalıştırdık)
+
+GOOGLE JIB:
+
+- Jib works only java applications.
+
+1. Google jib plugin i pom.xmle e ekle.
+
+<plugin>
+<groupId>com.google.cloud.tools</groupId>
+<artifactId>jib-maven-plugin</artifactId>
+<version>3.4.4</version>
+<configuration>
+  <to>
+    <image>merveyilmas/${project.artifactId}:s4</image>
+  </to>
+</configuration>
+</plugin> 
+
+2. mvn compile jib:dockerBuild
+(google jib ile image oluşturduk)
+
+- mvn compile jib:build
+( Bu komut ile sistemde docker yüklü olmasa bile goggle jib ile image oluşturabiliriz.)
+
+
+Push image to DockerHub;
+- docker image push docker.io/merveyilmas/accounts:s4
+
+Pull image to DockerHub;
+- docker image pull merveyilmas/accounts:s4
+
+Docker Compose;
+
+- Docker Compose, birden fazla Docker konteynerini tanımlamak ve yönetmek için kullanılan bir araçtır. Genellikle mikro hizmet mimarileri ve çoklu konteyner uygulamaları geliştirenler tarafından kullanılır. Docker Compose, bir YAML dosyasına (docker-compose.yml) servisleri, ağları, hacimleri ve konteyner ayarlarını tanımlamanıza olanak tanır.
+
+- docker compose version
+
+- Docker compose dosyasını istediğimiz dizinde oluşturabiliriz. Dosya ismi docker-compose.yml olmalıdır.
+
+- docker compose up -d
+(docker compose dosyasını oluşturduğumuz yerde bu komut ile container ları oluşturup, microservisleri çalıştırabiliriz)
+
+- docker compose stop
+(tüm containerları durdurur, silmez)
+
+- docker compose down
+(tüm containerlerı siler)
+
+
+CLOUD NATIVE APPLICATIONS;
+
+- Cloud-native applications (bulut yerel uygulamalar), bulut ortamlarında çalışacak şekilde tasarlanmış ve geliştirilmiş uygulamalardır. Bu tür uygulamalar, bulutun sunduğu avantajlardan tam olarak faydalanacak şekilde yapılandırılır ve genellikle mikro hizmet mimarisi, konteynerler, otomatik ölçekleme, sürekli entegrasyon/sürekli dağıtım (CI/CD) gibi modern yazılım geliştirme yaklaşımlarını kullanır.
+
+- Örnek Teknolojiler: 
+Kubernetes: Konteynerlerin orkestrasyonu.
+Docker: Konteyner teknolojisi.
+Prometheus: İzleme ve uyarı sistemi.
+Istio: Servis ağı ve mikro hizmetler için bir yönetim platformu.
+Terraform: Altyapı otomasyonu.
+
+
+12-Factor App ve 15-Factor App Metodolojileri;
+
+- 12-Factor App ve 15-Factor App metodolojileri, bulut tabanlı uygulamaların geliştirilmesi ve dağıtılması için uygulama geliştirme süreçlerinde en iyi uygulamaları tanımlar. Bu metodolojiler, modern, mikro hizmet tabanlı uygulamaların esnek, taşınabilir ve sürdürülebilir olmasını sağlamak için çeşitli yönergeler sunar.
+
+12-Factor App Metodolojisi;
+
+- 12-Factor App metodolojisi, her bir uygulamanın bulut ortamında verimli çalışmasını sağlayacak şekilde geliştirilmesi için 12 temel prensipten oluşur. Bu prensipler, uygulamanın taşınabilirliğini, esnekliğini ve ölçeklenebilirliğini arttırmaya yönelik ipuçları sunar. 12-Factor, özellikle bulut yerel (cloud-native) uygulamalar için önemli bir rehberdir.
+
+12-Factor Uygulama Prensipleri:
+
+1. Codebase (Kod Tabanı): Uygulama, tek bir kod tabanından (repository) yönetilmelidir ve her ortamda (geliştirme, test, üretim) aynı kod tabanı kullanılmalıdır.
+
+2. Dependencies (Bağımlılıklar): Uygulamanın bağımlılıkları açıkça tanımlanmalı ve bağımsız olarak yüklenebilmelidir. Yani, uygulama bağımlılıkları dışarıdan (örneğin, package.json, pom.xml) açıkça belirtmelidir.
+
+3. Config (Yapılandırma): Yapılandırma verileri (veritabanı bağlantı bilgileri gibi), uygulamanın içinde değil, dış bir ortamda veya çevresel değişkenlerde saklanmalıdır.
+
+4. Backing Services (Destekleyici Servisler): Veritabanları, mesajlaşma sistemleri gibi dış servisler, uygulamanın bir parçası gibi düşünülmeli, fakat ayrı birer servis olarak ele alınmalıdır.
+
+5. Build, Release, Run (Yapı, Yayınlama, Çalıştırma): Uygulamanın derlenmesi (build), yayına alınması (release) ve çalıştırılması (run) süreçleri ayrılmalıdır. Her aşama açıkça tanımlanmalıdır.
+
+6. Processes (İşlemler): Uygulama, durumu taşımayan (stateless) işlemlerle çalışmalıdır. Her işlem kendi başına bağımsız olmalı ve işlem sırasındaki herhangi bir kayıp, diğer işlemleri etkilememelidir.
+
+7. Port Binding (Port Bağlama): Uygulama, bir web sunucusunu çalıştırmak için bir port üzerinden erişilebilir olmalıdır. Uygulama dışındaki proxy sistemleri yerine, uygulamanın kendisi doğrudan HTTP veya TCP portu üzerinden dinlemelidir.
+
+8. Concurrency (Eşzamanlılık): Uygulama, artan talepleri karşılamak için çoklu iş parçacığı (concurrency) veya işlemlerle yatay olarak ölçeklenebilir olmalıdır.
+
+9. Disposability (Geçici Olma): Uygulama, kısa süreli yaşam döngülerine sahip olmalı ve gerektiğinde hızlıca başlatılabilir ve sonlandırılabilir olmalıdır.
+
+10. Dev/Prod Parity (Geliştirme ve Üretim Farkı): Geliştirme, test ve üretim ortamları arasındaki farklar minimumda tutulmalıdır. Geliştiriciler ve operasyon ekipleri arasındaki kopukluk azaltılmalıdır.
+
+11. Logs (Loglar): Uygulama, log verilerini stdout (standart çıktı) üzerinden dışarıya göndermeli ve bu loglar merkezi bir sistemde toplanmalıdır.
+
+12. Admin Processes (Yönetici İşlemleri): Yönetici ve bakım işlemleri (örneğin, veritabanı migration'ları) uygulamanın bir parçası olarak tanımlanmalı ve çalıştırılabilir olmalıdır.
+
+15-Factor App Metodolojisi;
+
+- 15-Factor App metodolojisi, 12-Factor App metodolojisinin bir uzantısıdır ve 12-Factor'a ek olarak bazı ekstra faktörler ekler. Bu faktörler, bulut tabanlı uygulamaların daha etkili bir şekilde yönetilmesi, izlenmesi ve yapılandırılmasına olanak sağlar.
+
+15-Factor Uygulama Prensipleri:
+
+- 15-Factor App, 12-Factor metodolojisinin temeline dayanarak daha detaylı bir yapı sağlar. Ekstra faktörler şunlardır:
+
+13. Rate Limiting (Hız Limitleme): Uygulama, dışarıya açılan API'lar ve servislerle olan etkileşimlerde hız sınırlaması yapabilmelidir. Bu, istek başına alınabilecek yanıt sayısını sınırlayarak uygulamanın aşırı yüklenmesini engeller.
+
+14. Backups (Yedekleme): Veritabanı ve diğer kritik servisler için düzenli yedekleme stratejileri tanımlanmalıdır. Bu, felaket durumlarında veri kaybını önler.
+
+15. Health Checks (Sağlık Kontrolleri): Uygulama, çalışma durumunu düzenli olarak kontrol edebilecek sağlık kontrolü mekanizmalarına sahip olmalıdır. Bu sayede sistem hatalarına karşı otomatik olarak yanıt verilebilir.
+
+12-Factor ve 15-Factor Karşılaştırması;
+
+- 12-Factor App metodolojisi, bulut ortamlarında verimli çalışan ve sürdürülebilir uygulamalar geliştirmek için temel yönergeleri sağlar.
+15-Factor App metodolojisi, 12-Factor metodolojisini genişleterek uygulama yönetimi ve izleme gibi ekstra faktörler ekler. Bu, büyük ölçekli sistemlerde daha iyi bir operasyonel yönetim sağlar.
+
+
+CONGIFURATION MANAGEMENT IN MICROSERVICE;
+
+- 
