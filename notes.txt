@@ -30,6 +30,23 @@ Docker Commands;
 - docker start e0443edcb6ac0541e8ff46d1aa221660f755985d78ddc904ae50d7bc0c998a65
 (conatiner ıd ile container çalıştırır)
 
+Accounts Dockerfile örneği;
+
+#Start with a base image containing Java runtime
+FROM openjdk:21-jdk-slim
+
+# MAINTAINER instruction is deprecated in favor of using label
+# MAINTAINER meryil.com
+#Information around who maintains the image
+LABEL "org.opencontainers.image.authors"="meryil.com"
+
+# Add the application's jar to the image
+COPY target/accounts-0.0.1-SNAPSHOT.jar accounts-0.0.1-SNAPSHOT.jar
+
+# execute the application
+ENTRYPOINT ["java", "-jar", "accounts-0.0.1-SNAPSHOT.jar"]
+
+
 - Dockerfile oluşturmak için buildpacks ve GoogleJib kullanabiliriz.
 
 BUILDPACKS:
@@ -173,4 +190,153 @@ Terraform: Altyapı otomasyonu.
 
 CONGIFURATION MANAGEMENT IN MICROSERVICE;
 
-- 
+Read properties in Springboot app:
+
+1. Using @Value annotation; 
+
+application.yml veya application.properties dosyasına tanımladığımız değişkenlere istediğimiz yerde erişebiliriz.
+
+ÖR;
+application.yml;
+
+build:
+  version: "1.0"
+  
+account controller;
+
+@Value("${build.version}")
+private String buildVersion;
+
+2. Using Environment;
+
+- Çevresel değişkenlere erişmek için kullanırız.
+
+ÖR;
+
+account controller;
+
+@Autowired
+private Environment environment;
+
+@GetMapping("/java-version")
+public ResponseEntity<String> getJavaVersion() {
+	return ResponseEntity.status(HttpStatus.OK).body(environment.getProperty("JAVA_HOME"));
+}
+
+Açıklama;
+// jdk nın yüklü olduğu dizini verir
+environment.getProperty("JAVA_HOME")
+
+// maven ın yüklü olduğu dizini verir
+environment.getProperty("MAVEN_HOME")
+
+3. Using @ConfigurationProperties;
+
+-Birden fazla değişkene değer tanımlamak için kullanabiliriz.
+
+ÖR;
+
+application.yml;
+
+accounts:
+  message: "Welcome to EazyBank accounts related local APIs "
+  contactDetails:
+    name: "John Doe - Developer"
+    email: "john@eazybank.com"
+  onCallSupport:
+    - (555) 555-1234
+    - (555) 523-1345
+
+AccountsContactInfoDto;
+
+@ConfigurationProperties(prefix = "accounts")
+public record AccountsContactInfoDto(String message, Map<String, String> contactDetails, List<String> onCallSupport) {
+}
+
+AccountsApplication;
+
+@SpringBootApplication
+@EnableConfigurationProperties(value = {AccountsContactInfoDto.class})
+
+AccountsController;
+
+@Autowired
+private AccountsContactInfoDto accountsContactInfoDto;
+
+@GetMapping("/contact-info")
+    public ResponseEntity<AccountsContactInfoDto> getContactInfo() {
+        return ResponseEntity.status(HttpStatus.OK).body(accountsContactInfoDto);
+    }
+    
+Springboot Profiles;
+
+- application_prod.yml ve application_qa.yml isminde iki ayrı profil oluşturduk.
+
+application_qa.yml;
+
+spring:
+  config:
+    activate:
+      on-profile: "qa"
+
+build:
+  version: "2.0"
+
+accounts:
+  message: "Welcome to Meryil accounts related QA APIs "
+  contactDetails:
+    name: "Smitha Ray - QA Lead"
+    email: "smitha@meryil.com"
+  onCallSupport:
+    - (666) 265-3765
+    - (666) 734-8371
+
+application.yml;
+
+spring:
+  config:
+    import:
+      - "application_qa.yml"
+      - "application_prod.yml"
+  profiles:
+    active:
+      - "qa"
+      
+- application.yml dosyasında profiles.active kısmında hangi profile in ismini yazarsak o yml dosyasındaki konfigürasyonlar çalışır.
+
+Komut Satırı ile Profile Aktif Etme;
+
+1. Program arguments ile set etme;
+
+- Intellij idea üzerinden profili aktif etmek için AccountsApplictaion dosyasına sağ tık yapıp, more run/debug - modify run configuration e tıklarız. Ardından açılan pencerede program arguments kısmına 
+
+--spring.profiles.active=prod  --build.version=1.1 
+
+şeklinde yazarak istediğimiz değişkeni set ederiz.
+
+2. VM options ile set etme;
+
+- Intellij idea üzerinden profili aktif etmek için AccountsApplictaion dosyasına sağ tık yapıp, more run/debug - modify run configuration e tıklarız. Ardından açılan pencerede modify options kısmından 'Add VM options' seçeneğine tıklarız. Açılan sekmeye ise 
+
+-Dspring.profiles.active=prod  -Dbuild.version=1.1
+
+şeklinde yazarak istediğimiz jvm değişkenlerini set ederiz.
+
+3. Environment Variables ile set etme;
+
+- Intellij idea üzerinden profili aktif etmek için AccountsApplictaion dosyasına sağ tık yapıp, more run/debug - modify run configuration e tıklarız. Ardından açılan pencerede environment variable kısmına
+
+SPRING_PROFILES_ACTIVE=prod;BUILD_VERSION=1.8;
+
+şeklinde yazarak istediğimiz değişkenlerini set ederiz.
+
+- Eğer konfigürasyon dosyasında 3 alana da değişkenleri set edersek proje program arguments kısmında yazan değeri alır. 
+
+- Eğer VM ve environment kısmında aynı aynda değişken set edilirse VM variable kısmmındaki değişkeni baz alır.
+
+- Yani öncelik sırası;
+Program arguments > VM options > Environment Variables
+
+SPRING CLOUD CONFIG;
+
+
