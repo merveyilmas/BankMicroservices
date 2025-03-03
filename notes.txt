@@ -339,4 +339,21 @@ Program arguments > VM options > Environment Variables
 
 SPRING CLOUD CONFIG;
 
+- Spring initializers dan spring config projesi oluşturduk.
+Proje oluştururken dependency olarak "config server" ve "spring boot actuator" bağımlılıklarını seçtik.
+
+1. Reading configurations from the class path location of config server;
+
+- Config server projesinde "resources" dizini altına "config" klasörü ekledik. Config klasörü altına ise tüm yml dosyalarını taşıdık. (accounts.yml, accounts-prod.yml vs.) Serverconfig projesine aşağıdaki linkler ile istek atarak tanımlanan configürasyonlara erişim sağlarız.
+
+- http://localhost:8071/accounts/default
+- http://localhost:8071/accounts/prod
+- http://localhost:8071/accounts/qa
+- http://localhost:8071/loans/qa
+
+2. Reading configurations from a file system location;
+-
+
+3. Reading configurations from a github repository;
+-
 

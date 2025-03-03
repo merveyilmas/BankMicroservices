@@ -16,6 +16,13 @@ spring:
             mode: none
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
+  config:
+    import:
+      - "application_qa.yml"
+      - "application_prod.yml"
+    profiles:
+      active:
+        - "qa"
 
 application:
   version: 1.0.0
@@ -26,3 +33,15 @@ server:
 logging:
   level:
     org.springframework: error
+
+build:
+  version: "3.0"
+
+loans:
+  message: "Welcome to MeryilBank loans related local APIs "
+  contactDetails:
+    name: "Amaal Grega - Developer"
+    email: "amaal@meryilbank.com"
+  onCallSupport:
+    - (452) 456-2176
+    - (546) 764-8934

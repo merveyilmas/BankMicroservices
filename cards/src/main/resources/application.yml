@@ -16,6 +16,13 @@ spring:
             mode: none
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
+  config:
+    import:
+      - "application_qa.yml"
+      - "application_prod.yml"
+  profiles:
+    active:
+      - "qa"
 
 application:
   version: 1.0.0
@@ -26,3 +33,15 @@ server:
 logging:
   level:
     org.springframework: error
+
+build:
+  version: "3.0"
+
+cards:
+  message: "Welcome to MeryilBank cards related local APIs "
+  contactDetails:
+    name: "Dragos Lech - Developer"
+    email: "dragos@meryilbank.com"
+  onCallSupport:
+    - (412) 419-3491
+    - (915) 382-1932

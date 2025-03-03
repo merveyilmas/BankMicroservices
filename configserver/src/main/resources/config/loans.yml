@@ -1,0 +1,17 @@
+application:
+  version: 1.0.0
+
+server:
+  port: 8090
+
+build:
+  version: "3.0"
+
+loans:
+  message: "Welcome to MeryilBank loans related local APIs "
+  contactDetails:
+    name: "Amaal Grega - Developer"
+    email: "amaal@meryilbank.com"
+  onCallSupport:
+    - (452) 456-2176
+    - (546) 764-8934

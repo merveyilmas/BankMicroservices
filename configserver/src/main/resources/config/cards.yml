@@ -1,0 +1,17 @@
+application:
+  version: 1.0.0
+
+server:
+  port: 9000
+
+build:
+  version: "3.0"
+
+cards:
+  message: "Welcome to MeryilBank cards related local APIs "
+  contactDetails:
+    name: "Dragos Lech - Developer"
+    email: "dragos@meryilbank.com"
+  onCallSupport:
+    - (412) 419-3491
+    - (915) 382-1932
