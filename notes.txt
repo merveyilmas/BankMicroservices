@@ -2,11 +2,13 @@ Springboot;
 @RestController -> Rest apiler için kullanılır
 @Controller -> MVC projeler için kullanılır
 
+
 Maven Commands;
 - mvn clean install
 - mvn spring-boot:run
 
 - java -jar target/accounts-0.0.1-SNAPSHOT.jar
+
 
 Docker Commands;
 - docker build . -t merveyilmas/accounts:s4
@@ -30,6 +32,7 @@ Docker Commands;
 - docker start e0443edcb6ac0541e8ff46d1aa221660f755985d78ddc904ae50d7bc0c998a65
 (conatiner ıd ile container çalıştırır)
 
+
 Accounts Dockerfile örneği;
 
 #Start with a base image containing Java runtime
@@ -48,6 +51,7 @@ ENTRYPOINT ["java", "-jar", "accounts-0.0.1-SNAPSHOT.jar"]
 
 
 - Dockerfile oluşturmak için buildpacks ve GoogleJib kullanabiliriz.
+
 
 BUILDPACKS:
 
@@ -73,6 +77,7 @@ Dockerfile olmadan buildpacks ile image oluşturmak için;
 - <packaging> ve <image> i ilgili yerlere ekle pom.xml de
 - mvn spring-boot:build-image
 (maven ile image oluşturmak için bu komutu çalıştırdık)
+
 
 GOOGLE JIB:
 
@@ -103,6 +108,7 @@ Push image to DockerHub;
 
 Pull image to DockerHub;
 - docker image pull merveyilmas/accounts:s4
+
 
 Docker Compose;
 
@@ -304,6 +310,7 @@ spring:
       
 - application.yml dosyasında profiles.active kısmında hangi profile in ismini yazarsak o yml dosyasındaki konfigürasyonlar çalışır.
 
+
 Komut Satırı ile Profile Aktif Etme;
 
 1. Program arguments ile set etme;
@@ -337,6 +344,7 @@ SPRING_PROFILES_ACTIVE=prod;BUILD_VERSION=1.8;
 - Yani öncelik sırası;
 Program arguments > VM options > Environment Variables
 
+
 SPRING CLOUD CONFIG;
 
 - Spring initializers dan spring config projesi oluşturduk.
@@ -351,9 +359,173 @@ Proje oluştururken dependency olarak "config server" ve "spring boot actuator" 
 - http://localhost:8071/accounts/qa
 - http://localhost:8071/loans/qa
 
+- Config server a accounts, cards ve loans yml dosyaları eklendikten sonra accounts, cards ve loans projelerindeki prod ve qa konfigürasyonlarını siliyoruz.
+
+- Accounts projesine config client dependency lerini ekliyoruz.
+
+<properties>
+	<java.version>21</java.version>
+	<spring-cloud.version>2024.0.0</spring-cloud.version>
+</properties>
+	
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-config</artifactId>
+</dependency>
+
+<dependencyManagement>
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-dependencies</artifactId>
+			<version>${spring-cloud.version}</version>
+			<type>pom</type>
+			<scope>import</scope>
+		</dependency>
+	</dependencies>
+</dependencyManagement>
+
+
+- accounts projesindeki application.yml dosyasının son hali bu şekilde oluyor;
+
+spring:
+  application:
+    name: accounts
+  profiles:
+    active: "prod"
+  datasource:
+    url: jdbc:mysql://localhost:3306/UdemyAccounts
+    username: merve
+    password: Merve123.
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      javax:
+        persistence:
+          validation:
+            mode: none
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+  config:
+    import: "optional:configserver:http://localhost:8071/"
+
+application:
+  version: 1.0.0
+
+server:
+  port: 8080
+
+logging:
+  level:
+    org.springframework: error
+
+---
+application:
+    name: accounts
+---
+- Bu kısımdaki name alanı configserver projesinde accounts projesi için oluşturulan yml dosyasının ismi ile aynı olmak zorunda.
+
+- Aynı işlemleri lonas ve cards projeleri için de yapıyoruz.
+
 2. Reading configurations from a file system location;
--
+- configserver projesindeki konfigürasyonları barındıran config dosyasını kopyalayıp bilgisayarada bir dizine yapıştırdım. ("/home/merveyilmaz/Documents/config")
+
+- Daha sonra ise configserver projesinde bulunan application.yml dosyasındaki config.server.native.search.locations kısmını dosya yolu olacak şekilde düzenliyoruz.
+
+spring:
+  application:
+    name: "configserver"
+  profiles:
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          #search-locations: "classpath:/config"
+          search-locations: "file:///home/merveyilmaz/Documents/config"
 
 3. Reading configurations from a github repository;
--
 
+- github da public repository açıp config klasörü altındaki yml dosyalarını bu repository e pushluyoruz. Ardından configserver projesi altındaki application.yml dosyasında aşağıdaki düzenlemeleri yapıyoruz.
+
+spring:
+  application:
+    name: "configserver"
+  profiles:
+    #active: native
+    active: git
+  cloud:
+    config:
+      server:
+        #native:
+          #search-locations: "classpath:/config"
+          #search-locations: "file:///home/merveyilmaz/Documents/config"
+        git:
+          uri: "https://github.com/eazybytes/eazybytes-config.git"
+          default-label: main
+          timeout: 5
+          clone-on-start: true
+          force-pull: true
+
+server:
+  port: 8071
+
+
+Encryption & Decryption of properties inside config server;
+
+- config dosyamızı github a yüklediğimiz için verilerimizi göstermek istemeyiz. Config verilerini şifrelemek için configserver projesindeki application.yml dosyasına şu alanı ekleriz.
+
+encrypt:
+  key: "45D81EC1EF61DF9AD8D3E5BB397F9"
+
+bu bizim şifreleme keyimiz olur.
+
+http://localhost:8071/encrypt 
+(body e şifrelemek istediğin text i koy body-raw-text)
+http://localhost:8071/decrypt 
+(body e config verisinin şifrelenmiş halini koy)
+
+apileri ile şifreleme veya şifrelenmiş veriyi öğrenme işlemlerini gerçekleştirebiliriz.
+
+- En son olarak ise şifrelemek istediğimiz veriyi şifreledikten sonra github da ilgili yere "{cipher}şifrelenmişveri" şeklinde güncelleriz.
+
+
+Refresh configurations at runtime using REFRESH ACTUATOR PATH;
+
+- Config dosyasında herhangi bir değişiklik yapıldığında projemiz otomatik algılasın istiyoruz.
+
+- Mikroservislerin pom.xml dosyamızda actuator dependency i olması gerekir.
+
+- Mikroservislerin ContactDto sınıflarını record dan normal class a dönüştürdük ki run time da herhangi bir değişiklik algılandığında değişkenler değişikliği alıgılayabilsin. 
+
+@ConfigurationProperties(prefix = "loans")
+@Getter @Setter
+public class LoansContactInfoDto {
+
+    private String message;
+    private Map<String, String> contactDetails;
+    private List<String> onCallSupport;
+}
+
+- Mikroservislerin application.yml dosyalarına şu konfigürasyonu ekliyoruz;
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+- Githubdan accounts-prod.yml dosyasında bir string i değiştirdiğğimizde projeyi yeniden başlatmaya gerek kalmadan configürasyon dosyası proje tarafından otomatik algılanır. Githubdan string değiştirip config serverdan http://localhost:8071/accounts/prod adresine istek atarak test edebiliriz.
+
+- Bu işlem actuator sayesinde olur.
+
+- localhost:8080/actuator adresine istek atarak actuator ın sunduğu apileri görebiliriz.
+
+- localhost:8080/actuator/refresh endpointi ile hangi property lerin değiştiğini görebiliriz.
+
+
+Refresh configurations at runtime using Spring Cloud Bus;
+
+-

@@ -1,6 +1,8 @@
 spring:
   application:
     name: loans
+  profiles:
+    active: "prod"
   datasource:
     url: jdbc:mysql://localhost:3306/UdemyLoans
     username: merve
@@ -17,12 +19,7 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
   config:
-    import:
-      - "application_qa.yml"
-      - "application_prod.yml"
-    profiles:
-      active:
-        - "qa"
+    import: "optional:configserver:http://localhost:8071/"
 
 application:
   version: 1.0.0
@@ -37,11 +34,8 @@ logging:
 build:
   version: "3.0"
 
-loans:
-  message: "Welcome to MeryilBank loans related local APIs "
-  contactDetails:
-    name: "Amaal Grega - Developer"
-    email: "amaal@meryilbank.com"
-  onCallSupport:
-    - (452) 456-2176
-    - (546) 764-8934
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"

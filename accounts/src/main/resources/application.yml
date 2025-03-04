@@ -1,6 +1,8 @@
 spring:
   application:
     name: accounts
+  profiles:
+    active: "prod"
   datasource:
     url: jdbc:mysql://localhost:3306/UdemyAccounts
     username: merve
@@ -17,12 +19,7 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
   config:
-    import:
-      - "application_qa.yml"
-      - "application_prod.yml"
-  profiles:
-    active:
-      - "prod"
+    import: "optional:configserver:http://localhost:8071/"
 
 application:
   version: 1.0.0
@@ -34,14 +31,8 @@ logging:
   level:
     org.springframework: error
 
-build:
-  version: "3.0"
-
-accounts:
-  message: "Welcome to EazyBank accounts related local APIs "
-  contactDetails:
-    name: "John Doe - Developer"
-    email: "john@eazybank.com"
-  onCallSupport:
-    - (555) 555-1234
-    - (555) 523-1345
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
