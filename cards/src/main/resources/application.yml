@@ -20,16 +20,17 @@ spring:
         dialect: org.hibernate.dialect.MySQL8Dialect
   config:
     import: "optional:configserver:http://localhost:8071/"
+  rabbitmq:
+    host: "localhost"
+    port: 5672
+    username: "guest"
+    password: "guest"
 
 application:
   version: 1.0.0
 
 server:
   port: 9000
-
-logging:
-  level:
-    org.springframework: error
 
 management:
   endpoints:

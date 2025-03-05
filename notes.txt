@@ -528,4 +528,429 @@ management:
 
 Refresh configurations at runtime using Spring Cloud Bus;
 
--
+- Spring cloud bus konfigürasyon dosyasınd aherhangi bir değişiklik olduğunda kaç adet mikroservis var ise hepsine aynı anda mesaj gönderir.
+
+- Bunu rabbit mq ile yapacağız.
+- Tüm mikroservis projelerimize ve configserver projemize aşağıdaki dependency i ekliyoruz.
+
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-bus-amqp</artifactId>
+</dependency>
+
+- Rabbitmq yu bilgisayarımıza docker komutu ile kuruyoruz
+(# latest RabbitMQ 4.0.x
+docker run -it --rm --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:4.0-management) - rabbit mq sitesinde var
+
+- Daha sonra tüm mikroservislerdeki application.yml dosyasına rabbit mq konfigürasyonunu ekliyoruz.
+
+spring:
+  rabbitmq:
+    host: "localhost"
+    port: 5672
+    username: "guest"
+    password: "guest"
+    
+Spring Cloud Config monitor;
+
+- Config repository de bir değişiklik olduğunda github webhook ile config servise bilgi verir. Config servis de rabbit mq ile mikroservislere mesaj gönderir. Mikroservisler de yeniden başlatılmasına gerek kalmadan kendilerini otomatik yenilerler.
+
+- Spring Cloud Config Monitor, Spring Cloud Config Server ile birlikte çalışan bir mekanizmadır ve konfigürasyon değişikliklerini dinleyerek, ilgili mikroservisleri bu değişikliklerden haberdar eder. Bu sayede, bir servis manuel yeniden başlatılmadan yeni konfigürasyonu alabilir.
+
+Nasıl Çalışır? 
+
+1. Spring Cloud Config Server ile merkezi bir yapılandırma yönetimi sağlanır. Genellikle bir Git deposu kullanılır.
+
+2. Spring Cloud Bus ile RabbitMQ veya Kafka gibi bir mesajlaşma altyapısı üzerinden mikroservislere bildirim gönderilir.
+
+3. Spring Cloud Config Monitor, Git deposundaki yapılandırma değişikliklerini algılar ve bir Webhook (örneğin, GitHub veya GitLab Webhook’u) üzerinden bir HTTP isteği alır.
+
+4. Gelen istek üzerine, ilgili servislere mesaj göndererek konfigürasyonlarını yenilemelerini sağlar.
+
+- config server projesinde pom.xml dosyasına depency i ekliyoruz.
+
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-config-monitor</artifactId>
+</dependency>
+
+- config server application.yml dosyasına aşağıdaki konfigürasyonub ekliyoruz.
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  health:
+    readiness-state:
+      enabled: true
+    liveness-state:
+      enabled: true
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        
+- config server application.yml dosyasına rabbit mq konfigürasyonunu ekliyoruz.
+
+spring:
+  rabbitmq:
+    host: "localhost"
+    port: 5672
+    username: "guest"
+    password: "guest"
+    
+- Daha sonra github config dosyalarımızın bulunduğu (card-prod.yml, accounts.yml vb.) repositorymizde ayarlar kısmında webhook atif ediyoruz.
+
+
+Update docker compose to adapt config server changes;
+
+- docker-compose isminde mikroservislerin olduğu dizinde bir kalsör açtık ve daha önce oluşturduğumuz docker-compose.yml dosyasını bu kalsöre taşıdık. Son olarak configserver projemiz için de docker compose dosyasına konfigürasyonları ekledik.
+
+- her bir mikroservis için docker-compose sayfasına enviroment değşkenleri tanımladık. 
+
+Docker-compose dosyasının son hali;
+
+services:
+  configserver:
+    image: "merveyilmas/configserver:s6"
+    container_name: configserver-ms
+    ports:
+      - "8071:8071"
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    networks:
+      - meryilbank
+  accounts:
+    image: "merveyilmas/accounts:s6"
+    container_name: accounts-ms
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    networks:
+      - meryilbank
+    environment:
+      SPRING_APPLICATION_NAME: "accounts"
+      SPRING_CONFIG_IMPORT: "configserver:http://configserver:8071/"
+      SPRONG_PROFILES_ACTIVE: default
+  loans:
+    image: "merveyilmas/loans:s6"
+    container_name: loans-ms
+    ports:
+      - "8090:8090"
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    networks:
+      - meryilbank
+    environment:
+      SPRING_APPLICATION_NAME: "loans"
+      SPRING_CONFIG_IMPORT: "configserver:http://configserver:8071/"
+      SPRONG_PROFILES_ACTIVE: default
+  cards:
+    image: "merveyilmas/cards:s6"
+    container_name: cards-ms
+    ports:
+      - "9000:9000"
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    networks:
+      - meryilbank
+    environment:
+      SPRING_APPLICATION_NAME: "cards"
+      SPRING_CONFIG_IMPORT: "configserver:http://configserver:8071/"
+      SPRONG_PROFILES_ACTIVE: default
+networks:
+  meryilbank:
+    driver: "bridge"
+
+- Bu docker-compose dosyasına göre configserver container ın oluşturulması tamamlanmadan accounts containerını oluşturmaya başlayacak. Bu da mikroservislerimizin çalışmasını engel olur.
+
+
+LIVENESS and READNESS probes;
+
+- Liveness; projenin ayakta olup olmadığını kontrol eder.
+- Readness; projede trafik akışı var mı onu kontrol eder.
+
+- configserver projesindeki application.yml dosyasına konfigürasyonu ekliyoruz.
+
+management:
+  
+  health:
+    readiness-state:
+      enabled: true
+    liveness-state:
+      enabled: true
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        
+- actuator endpointleri ile projenin liveness ve readness durumlarını kontorl edebiliriz.
+
+- localhost:8071/actuator/health
+response;
+{"status":"UP","groups":["liveness","readiness"]}
+
+- localhost:8071/actuator/health/liveness
+response;
+{"status":"UP"}
+
+- eğer porjede sorun var ise status ü down olur.
+
+
+Update DOCKER COMPOSE file to adapt congfig server cahnges;
+
+- docker compose dosyasında configserver containerına healthchech konfigürasyonları ekledik.
+
+- accounts containerına depends_on ekleyerek, config serverın sağlıklı bir şekilde çalıştığına emin olunduktan sonra account container ı oluşturulmaya başlanacak.
+
+- spring bus kullandığımız için bizim projelerin çalışması rabbit  mq projesine de bağlı. bu yüzden compose dosyasına rabbit mq servisini de docker compose dosyamıza ekliyoruz.
+
+- docker compose dosyasının son hali;
+
+services:
+
+  rabbit:
+    image: rabbitmq:3.13-management
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    extends:
+      file: common-config.yml
+      service: network-deploy-service
+
+  configserver:
+    image: "merveyilmas/configserver:s6"
+    container_name: configserver-ms
+    ports:
+      - "8071:8071"
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    networks:
+      - meryilbank
+    healthcheck:
+      test: "curl --fail --silent localhost:8071/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    extends:
+      file: common-config.yml
+      service: microservice-base-config
+
+  accounts:
+    image: "merveyilmas/accounts:s6"
+    container_name: accounts-ms
+    ports:
+      - "8080:8080"
+    depends_on:
+      configserver:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    networks:
+      - meryilbank
+    environment:
+      SPRING_APPLICATION_NAME: "accounts"
+      SPRING_CONFIG_IMPORT: "configserver:http://configserver:8071/"
+      SPRONG_PROFILES_ACTIVE: default
+      
+  loans:
+    image: "merveyilmas/loans:s6"
+    container_name: loans-ms
+    ports:
+      - "8090:8090"
+    depends_on:
+      configserver:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    networks:
+      - meryilbank
+    environment:
+      SPRING_APPLICATION_NAME: "loans"
+      SPRING_CONFIG_IMPORT: "configserver:http://configserver:8071/"
+      SPRONG_PROFILES_ACTIVE: default
+
+  cards:
+    image: "merveyilmas/cards:s6"
+    container_name: cards-ms
+    ports:
+      - "9000:9000"
+    depends_on:
+      configserver:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    networks:
+      - meryilbank
+    environment:
+      SPRING_APPLICATION_NAME: "cards"
+      SPRING_CONFIG_IMPORT: "configserver:http://configserver:8071/"
+      SPRONG_PROFILES_ACTIVE: default
+networks:
+  meryilbank:
+    driver: "bridge"
+
+
+OPTIMIZE DOCKER COMPOSE FILE;
+
+- docker-compose dosyamızda tekrar eden konfigürasyonları common-config.yml adında dosya oluşturup oraya taşıdık.
+
+- docker-compose.yml son hali;
+
+services:
+
+  rabbit:
+    image: rabbitmq:3.13-management
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmq-diagnostics check_port_connectivity
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    extends:
+      file: common-config.yml
+      service: network-deploy-service
+
+  configserver:
+    image: "merveyilmas/configserver:s6"
+    container_name: configserver-ms
+    ports:
+      - "8071:8071"
+    depends_on:
+      rabbit:
+        condition: service_healthy
+    healthcheck:
+      test: "curl --fail --silent localhost:8071/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    extends:
+      file: common-config.yml
+      service: microservice-base-config
+
+  accounts:
+    image: "merveyilmas/accounts:s6"
+    container_name: accounts-ms
+    ports:
+      - "8080:8080"
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_APPLICATION_NAME: "accounts"
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
+
+  loans:
+    image: "merveyilmas/loans:s6"
+    container_name: loans-ms
+    ports:
+      - "8090:8090"
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_APPLICATION_NAME: "loans"
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
+
+  cards:
+    image: "merveyilmas/cards:s6"
+    container_name: cards-ms
+    ports:
+      - "9000:9000"
+    depends_on:
+      configserver:
+        condition: service_healthy
+    environment:
+      SPRING_APPLICATION_NAME: "cards"
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
+
+networks:
+  meryilbank:
+    driver: "bridge"
+
+- common-config.yml dosyası;
+
+services:
+
+  network-deploy-service:
+    networks:
+      - meryilbank
+
+  microservice-base-config:
+    extends:
+      service: network-deploy-service
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+    environment:
+      SPRING_RABBITMQ_HOST: "rabbit"
+
+  microservice-configserver-config:
+    extends:
+      service: microservice-base-config
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_CONFIG_IMPORT: configserver:http://configserver:8071/
+      
+
+Generate docker image and push them to docker hub;
+
+- İlk olarak tüm projelerin google jib ile image ını oluşturuyoruz.
+(mvn compile jib:dockerBuild) komutunu kullanarak proje dizininde.
+
+- daha sonra oluşturulan imageleri 
+docker image push docker.io/merveyilmas/configserver:s6
+komutu ile teker teker hub a pushladık.
+
+
+DOCKER COMPOSE ile container oluşturma;
+
+- Oluşturduğumuz docker-compose/default dizinindeki docker-compose dosyamızı
+docker compose up -d
+komutu ile çalıştırıyoruz.
+
+- docker compose down 
+ise oluşturulan tüm containerler ı siler.
+
+

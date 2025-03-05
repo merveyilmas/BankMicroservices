@@ -54,6 +54,10 @@
 			<artifactId>spring-cloud-starter-config</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-bus-amqp</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>
 			<scope>runtime</scope>
@@ -114,7 +118,7 @@
 				<version>3.4.4</version>
 				<configuration>
 					<to>
-						<image>merveyilmas/${project.artifactId}:s4</image>
+						<image>merveyilmas/${project.artifactId}:s6</image>
 					</to>
 				</configuration>
 			</plugin>
