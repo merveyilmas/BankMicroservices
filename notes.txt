@@ -954,3 +954,20 @@ komutu ile çalıştırıyoruz.
 ise oluşturulan tüm containerler ı siler.
 
 
+CREATE MYSQLDB FOR MICROOSERVICES;
+
+- docker run -p 3306:3306 --name accountsdb -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=accountsdb  -d mysql
+komutu ile mysql db container ı oluşturduk.
+
+
+UPDATE DOCKER COMPOSE FILE TO CREATE USE MYSQL DB;
+
+- ilk olarak mikroservislerimizin image lerini oluşturuyoruz.
+(mvn compile jib:dockerBuild) komutu ile
+
+- Daha sonra docker-compose dosyamızı güncelliyoruz, db konfigürasyonları ekliyoruz. Dockor-compose dosyamızı çalıştırmak için "docker compose up" komutunu dosyamızın olduğu dizinde çalıştırıyoruz.
+
+
+SERVICE DISCOVERY & SERVIICE REGISTRATION in MICROSERVICE:
+
+
