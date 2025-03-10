@@ -970,4 +970,73 @@ UPDATE DOCKER COMPOSE FILE TO CREATE USE MYSQL DB;
 
 SERVICE DISCOVERY & SERVIICE REGISTRATION in MICROSERVICE:
 
+Spring cloud support for client-side service discovery;
+
+- spring cloud netflix's eureka (for service discovery)
+- spring cloud load balancer
+- netflix feign client 
+
+
+EUREKASERVER;
+
+- Spring initializerdan eurekaserver projesi oluşturuyoruz. Proje oluştururken 'Eureka Server', 'Config Client' ve 'Spring Boot Actuator' dependency lerini eklememiz gerekir.
+
+- Daha sonra projemizin EurekaserverApplication klasöründe @EnableEurekaServer anatasyonunu tanımlıyoruz.
+
+- projemizdeki application.yml dosyasına ilgili konfigürasyon ayarlarını ekliyoruz.
+
+- ayrıca config dosyalarımızın bulunduğu klasörümüze eurekaserver.yml dosyamızı ekliyoruz. yine ilgili konfigürasyonlarımızı yazıyoruz.
+
+- daha sonra eurekaserver projemizi çalıştırdıktan sonra 'http://localhost:8070/' adresini ziyaret ettiğimizde eureka server panelimize ulaşıyoruz.
+
+
+CONNECT EUREKA SERVER from MICROSERVICE;
+
+-  Eureka server a bağlanmak istediğimiz mikroservislerin pom.xml dosyasına
+aşağıdaki dependency i ekliyoruz.
+
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+</dependency>
+
+- Ardından accounts mikroservisi içerisindeki application.yml dosyasına aşağıdaki konfigürasyonları ekliyoruz.
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    shutdown:
+      access: unrestricted
+  info:
+    env:
+      enabled: true
+
+eureka:
+  instance:
+    preferIpAddress: true
+  client:
+    fetchRegistry: true # Kayıtları çekmesini aktif et
+    registerWithEureka: true # Kendi kendini kayıt etmesini aktif et
+    serviceUrl:
+      defaultZone: http://localhost:8070/eureka/
+
+info:
+  app:
+    name: "accounts"
+    description: "Meryil Bank Account Application"
+    version: "1.0.0"
+    
+- Accounts mikroservisine konfigürasyonları ekledikten sonra projemizi ayağa kaldırabiliriz.
+
+- Account mikroservis ayağa kalktıktan sonra eureka server a bağlanıp bağlanmadığını "http://localhost:8070/" adresinden (euureka server proje portu) kontrol edebiliriz. Ayrıca http://localhost:8070/ adresinde mikroservis ismine tıklayarak application dosyasına tanımladığımız mikroservis info bilgilerine ulaşabiliriz. (http://192.168.80.171:8080/actuator/info)
+
+- Bu konfigürasyonları cards ve loans mikroservislerine de uygulayacağız.
+
+- http://localhost:8070/eureka/apps adresinden eureka server a bağlanan tüm mikroservis bilgilerini görebiliriz.
+
+!NOT: Mikroservislerimizi ayağa kaldırmadan önce ilk "configserver" ı daha sonra "eurekaserver" ı ayağa kaldırmamız gerekir. Yoksa mikroservisimiz çalışmaz.
+
 

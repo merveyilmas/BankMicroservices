@@ -4,9 +4,12 @@ spring:
   profiles:
     active: "prod"
   datasource:
-    url: jdbc:mysql://localhost:3309/loansdb
-    username: root
-    password: root
+    #url: jdbc:mysql://localhost:3309/loansdb
+    #username: root
+    #password: root
+    url: jdbc:mysql://localhost:3306/UdemyLoans
+    username: merve
+    password: Merve123.
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
@@ -21,17 +24,32 @@ spring:
   config:
     import: "optional:configserver:http://localhost:8071/"
 
-application:
-  version: 1.0.0
-
 server:
   port: 8090
-
-build:
-  version: "3.0"
 
 management:
   endpoints:
     web:
       exposure:
         include: "*"
+  endpoint:
+    shutdown:
+      access: unrestricted
+  info:
+    env:
+      enabled: true
+
+eureka:
+  instance:
+    preferIpAddress: true
+  client:
+    fetchRegistry: true # Kayıtları çekmesini aktif et
+    registerWithEureka: true # Kendi kendini kayıt etmesini aktif et
+    serviceUrl:
+      defaultZone: http://localhost:8070/eureka/
+
+info: #eureka serverda bu alan gözükür
+  app:
+    name: "loans"
+    description: "Meryil Bank Loan Application"
+    version: "1.0.0"

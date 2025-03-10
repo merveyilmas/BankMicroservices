@@ -32,12 +32,6 @@ import org.springframework.web.bind.annotation.*;
 @Validated
 public class AccountsController {
 
-    private final IAccountsService iAccountsService;
-
-    public AccountsController(IAccountsService iAccountsService){
-        this.iAccountsService = iAccountsService;
-    }
-
     @Value("${build.version}")
     private String buildVersion;
 
@@ -46,6 +40,12 @@ public class AccountsController {
 
     @Autowired
     private AccountsContactInfoDto accountsContactInfoDto;
+
+    private final IAccountsService iAccountsService;
+
+    public AccountsController(IAccountsService iAccountsService){
+        this.iAccountsService = iAccountsService;
+    }
 
     @Operation(
             summary = "Create Account REST API",
