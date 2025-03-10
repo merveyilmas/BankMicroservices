@@ -1074,3 +1074,234 @@ public interface CardsFeignClient {
 - Burada @FeignClient("cards") eurekaserverda mikroservis ismi ne ise anatasyon içerisine de o ismi yazıyoruz.
 
 - Böylece mikroservislerimiz feign client aracılığı ile eurekaserver a istek atarlar ve eurekaserver da istek atılan mikroservise yönlendirir.
+
+
+EUREKA SERVER Self-Preservation MODE;
+
+- Eureka Server'ın Self-Preservation Mode (Kendini Koruma Modu), ağ kesintileri veya ani servis kayıpları gibi durumlarda yanlışlıkla sağlıklı servisleri silmemek için geliştirilmiş bir mekanizmadır.
+
+Neden Gerekli?
+Eureka Client'lar belirli aralıklarla heartbeat (kalp atışı) mesajları göndererek Eureka Server’a hala çalıştıklarını bildirir. Ancak ağ bağlantısı koparsa veya gecikmeler yaşanırsa, Eureka Server client'ların aslında çalışıyor olup olmadığını anlayamaz.
+
+Eğer Self-Preservation Mode kapalı olursa ve Eureka belirlenen süre içinde heartbeat alamazsa, servisi kayıttan siler. Ancak bu bazen hatalı olabilir, çünkü servis çalışıyor olabilir fakat sadece geçici bir ağ sorunu yaşanıyor olabilir.
+
+Bunu önlemek için Self-Preservation Mode, belirli bir eşik değerinin altına düşmedikçe servisleri silmemeyi tercih eder.
+
+DOCKER COMPOSE dosyasını güncelleme eureka servis için;
+
+- İlk olarak eurekaserver a google jib dependency i ekliyoruz image oluşturabilmek için.
+
+- docker-compose.yml dosyası son hali;
+
+services:
+
+#  accountsdb:
+#    container_name: accountsdb
+#    ports:
+#      - 3307:3306
+#    environment:
+#      MYSQL_DATABASE: accountsdb
+#    extends:
+#      file: common-config.yml
+#      service: microservice-db-config
+#
+#  cardsdb:
+#    container_name: cardsdb
+#    ports:
+#      - 3308:3306
+#    environment:
+#      MYSQL_DATABASE: cardsdb
+#    extends:
+#      file: common-config.yml
+#      service: microservice-db-config
+#
+#  loansdb:
+#    container_name: loansdb
+#    ports:
+#      - 3309:3306
+#    environment:
+#      MYSQL_DATABASE: loansdb
+#    extends:
+#      file: common-config.yml
+#      service: microservice-db-config
+
+  configserver:
+    image: "merveyilmas/configserver:s8"
+    container_name: configserver-ms
+    ports:
+      - "8071:8071"
+    healthcheck:
+      test: "curl --fail --silent localhost:8071/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    extends:
+      file: common-config.yml
+      service: microservice-base-config
+
+  eurekaserver:
+    image: "merveyilmas/eurekaserver:s8"
+    container_name: eurekaserver-ms
+    ports:
+      - "8070:8070"
+    depends_on:
+      configserver:
+        condition: service_healthy
+    healthcheck:
+      test: "curl --fail --silent localhost:8070/actuator/health/readiness | grep UP || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
+    environment:
+      SPRING_APPLICATION_NAME: "eurekaserver"
+
+  accounts:
+    image: "merveyilmas/accounts:s8"
+    container_name: accounts-ms
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_APPLICATION_NAME: "accounts"
+#      SPRING_DATASOURCE_URL: "jdbc:mysql://accountsdb:3306/accountsdb"
+    depends_on:
+#      accountsdb:
+#        condition: service_healthy
+      configserver:
+        condition: service_healthy
+      eurekaserver:
+        condition: service_healthy
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
+
+  loans:
+    image: "merveyilmas/loans:s8"
+    container_name: loans-ms
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_APPLICATION_NAME: "loans"
+#      SPRING_DATASOURCE_URL: "jdbc:mysql://loansdb:3306/loansdb"
+    depends_on:
+#      loansdb:
+#        condition: service_healthy
+      configserver:
+        condition: service_healthy
+      eurekaserver:
+        condition: service_healthy
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
+
+  cards:
+    image: "merveyilmas/cards:s8"
+    container_name: cards-ms
+    ports:
+      - "9000:9000"
+    environment:
+      SPRING_APPLICATION_NAME: "cards"
+#      SPRING_DATASOURCE_URL: "jdbc:mysql://cardsdb:3306/cardsdb"
+    depends_on:
+#      cardsdb:
+#        condition: service_healthy
+      configserver:
+        condition: service_healthy
+      eurekaserver:
+        condition: service_healthy
+    extends:
+      file: common-config.yml
+      service: microservice-configserver-config
+
+networks:
+  meryilbank:
+    driver: "bridge"
+
+
+- common-config.yml dosyası son hali;
+
+services:
+
+  network-deploy-service:
+    networks:
+      - meryilbank
+
+#  microservice-db-config:
+#    extends:
+#      service: network-deploy-service
+#    image: mysql
+#    healthcheck:
+#      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+#      timeout: 10s
+#      retries: 10
+#      interval: 10s
+#      start_period: 10s
+#    environment:
+#      MYSQL_ROOT_PASSWORD: root
+
+  microservice-base-config:
+    extends:
+      service: network-deploy-service
+    deploy:
+      resources:
+        limits:
+          memory: 700m
+
+  microservice-configserver-config:
+    extends:
+      service: microservice-base-config
+    environment:
+      SPRING_PROFILES_ACTIVE: default
+      SPRING_CONFIG_IMPORT: configserver:http://configserver:8071/
+      #SPRING_DATASOURCE_USERNAME: root
+      #SPRING_DATASOURCE_PASSWORD: root
+
+  microservice-eureka-config:
+    extends:
+      service: microservice-configserver-config
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:8070/eureka/
+      
+Load balancing;
+
+  loans:
+    image: "merveyilmas/loans:s8"
+    container_name: loans-ms
+    ports:
+      - "8090:8090"
+    environment:
+      SPRING_APPLICATION_NAME: "loans"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://host.docker.internal:3306/UdemyLoans"
+    depends_on:
+#      loansdb:
+#        condition: service_healthy
+      configserver:
+        condition: service_healthy
+      eurekaserver:
+        condition: service_healthy
+    extends:
+      file: common-config.yml
+      service: microservice-eureka-config
+
+  loans1:
+    image: "merveyilmas/loans:s8"
+    container_name: loans-ms1
+    ports:
+      - "8091:8090"
+    environment:
+      SPRING_APPLICATION_NAME: "loans"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://host.docker.internal:3306/UdemyLoans"
+    depends_on:
+      configserver:
+        condition: service_healthy
+      eurekaserver:
+        condition: service_healthy
+    extends:
+      file: common-config.yml
+      service: microservice-eureka-config
+
+- Docker compose dosyamızda yukarıdaki gibi iki tane loans container ı tanımlarsak eurekaserver arka planda loans mikroservisine gelen istekleri yoğunluğa göre iki mikroservise dağıtır.
