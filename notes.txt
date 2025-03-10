@@ -979,6 +979,8 @@ Spring cloud support for client-side service discovery;
 
 EUREKASERVER;
 
+- Eureka Server, Spring Cloud Netflix kütüphanesinin bir parçası olan ve mikro servis mimarisinde servis keşfi (Service Discovery) sağlayan bir bileşendir.
+
 - Spring initializerdan eurekaserver projesi oluşturuyoruz. Proje oluştururken 'Eureka Server', 'Config Client' ve 'Spring Boot Actuator' dependency lerini eklememiz gerekir.
 
 - Daha sonra projemizin EurekaserverApplication klasöründe @EnableEurekaServer anatasyonunu tanımlıyoruz.
@@ -1039,4 +1041,36 @@ info:
 
 !NOT: Mikroservislerimizi ayağa kaldırmadan önce ilk "configserver" ı daha sonra "eurekaserver" ı ayağa kaldırmamız gerekir. Yoksa mikroservisimiz çalışmaz.
 
+- http://localhost:8080/actuator/shutdown
+- http://localhost:8090/actuator/shutdown
+- http://localhost:9000/actuator/shutdown
+yukarıdaki gibi mikroservislere istek attığımızda çalışmalarını durdurabiliriz.
 
+!NOT: Mikroservisler her 30 saniyede bir eureka server a heartbeat gönderirler. Ayakta olduklarını söylemek için.
+
+
+FEIGN CLIENT;
+
+- İlk olarak ilgili dependency i mikroservislerimize ekliyoruz.
+
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-openfeign</artifactId>
+</dependency>
+
+- Daha sonra application dosyalarına @EnableFeignClients anatasyonunu ekliyoruz.
+
+- Accounts mikroservisinde service paketi altına client adında bir paket ekliyoruz. Ve istek atacağımız service için bir interface oluşturuyoruz.
+
+Ör;
+
+@FeignClient("cards")
+public interface CardsFeignClient {
+
+    @GetMapping(value = "/api/fetch", consumes = "application/json")
+    public ResponseEntity<CardsDto> fetchCardDetails(@RequestParam String mobileNumber);
+}
+
+- Burada @FeignClient("cards") eurekaserverda mikroservis ismi ne ise anatasyon içerisine de o ismi yazıyoruz.
+
+- Böylece mikroservislerimiz feign client aracılığı ile eurekaserver a istek atarlar ve eurekaserver da istek atılan mikroservise yönlendirir.
