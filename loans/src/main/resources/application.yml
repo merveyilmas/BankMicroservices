@@ -53,3 +53,9 @@ info: #eureka serverda bu alan gözükür
     name: "loans"
     description: "Meryil Bank Loan Application"
     version: "1.0.0"
+
+logging:
+  level:
+    com:
+      app:
+        loans: DEBUG

@@ -53,3 +53,9 @@ info: #eureka serverda bu alan gözükür
     name: "cards"
     description: "Meryil Bank Card Application"
     version: "1.0.0"
+
+logging:
+  level:
+    com:
+      app:
+        cards: DEBUG

@@ -1305,3 +1305,263 @@ Load balancing;
       service: microservice-eureka-config
 
 - Docker compose dosyamızda yukarıdaki gibi iki tane loans container ı tanımlarsak eurekaserver arka planda loans mikroservisine gelen istekleri yoğunluğa göre iki mikroservise dağıtır.
+
+
+API Gateway;
+
+- Spring Cloud Gateway, Spring ekosisteminde API Gateway olarak kullanılan hafif ve ölçeklenebilir bir çözümdür. API Gateway, mikro hizmet mimarisinde istemciler (frontend, mobil uygulamalar vb.) ile arka plandaki servisler arasında bir giriş noktası olarak çalışır.
+
+🚀 Spring Cloud Gateway’in Temel Özellikleri:
+✅ Reverse Proxy: Gelen HTTP isteklerini uygun mikro servislere yönlendirir.
+✅ Route (Yönlendirme): Belirli kurallara (URL pattern, header, vs.) göre istekleri belirli servislere iletir.
+✅ Filter (Filtreleme): Gelen ve giden istekler üzerinde değişiklik yapabilir (örneğin, JWT doğrulama, CORS işlemleri, loglama).
+✅ Load Balancing: Gelen trafiği farklı servis kopyalarına yönlendirebilir.
+✅ Circuit Breaker: Servislerin çökmesini önlemek için koruyucu mekanizmalar sunar (Resilience4J gibi).
+✅ Rate Limiting: Belirli bir süre içinde belirli sayıda isteğe izin vererek DDOS saldırılarına karşı koruma sağlar.
+
+- Gateway için spring boot projemizi oluşturuyoruz ve aşağıdaki bağımlılıkları ekliyoruz.
+
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-config</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-gateway</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-devtools</artifactId>
+      <scope>runtime</scope>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.projectreactor</groupId>
+      <artifactId>reactor-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+- pom.xml dosaysına google jib bağımlılığını ekliyoruz, image oluşturabilmek için
+
+<build>
+	<plugins>
+		<plugin>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-maven-plugin</artifactId>
+		</plugin>
+		<plugin>
+			<groupId>com.google.cloud.tools</groupId>
+			<artifactId>jib-maven-plugin</artifactId>
+			<version>3.4.4</version>
+			<configuration>
+				<to>
+					<image>merveyilmas/${project.artifactId}:s9</image>
+				</to>
+			</configuration>
+		</plugin>
+	</plugins>
+</build>
+
+- config repository sine gatewayserver.yml dosyasını ekliyoruz ve aşağıdaki konfigüreasyonları tanımlıyoruz.
+
+server:
+  port: 8072
+
+eureka:
+  instance:
+    preferIpAddress: true
+  client:
+    registerWithEureka: true
+    fetchRegistry: true
+    serviceUrl:
+      defaultZone: "http://localhost:8070/eureka/"
+
+
+- gatewayserver projesindeki application.yml dosyasına dad aşağıdaki konfigürasyonları ekliyoruz.
+
+spring:
+  application:
+    name: "gatewayserver"
+  config:
+    import: "optional:configserver:http://localhost:8071/"
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    gateway:
+      access: unrestricted
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: "gatewayserver"
+    description: "Meryil Bank Gatewayserver Application"
+    version: "1.0.0"
+    
+- mikroservisleri çalıştırma sırası;
+configserver -> eurekaserver -> accounts, loans, cards -> gatewayserver
+
+- http://localhost:8072/actuator
+ile gateway server ın actuator endpointlerini listeleriz.
+
+- http://localhost:8072/actuator/gateway/routes
+endpoint'i Spring Cloud Gateway tarafından yönetilen tüm aktif rotaları (routes) JSON formatında döndürür. (accounts, loans, cards)
+
+- http://localhost:8072/ACCOUNTS/api/create
+gateway routesdan öğrendiğimiz yol ile accounts mikroservisine yukarıdaki gibi istek atarız.
+
+- accounts mikroservisine yukarıdaki gibi istek atarken mikroservis ismini ACCOUNTS gibi büyük yazmamız gerekir bu şekilde tanımlı olduğu için. Mikroservis ismini küçük harflerle yazabilmek için gateway servisine 
+
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lowerCaseServiceId: true
+
+konfigürasyonunu ekledik. Yani şimdi "http://localhost:8072/accounts/api/fetch?mobileNumber=1234567670" şeklinde istek atabiliriz.
+
+- Mikroservis endpointlerimizi konfigüre etmek için "GatewayserverApplication" dosyamıza aşağıdaki fonksiyonu ekledik.
+
+@Bean
+public RouteLocator meryilBankRouteConfig(RouteLocatorBuilder routeLocatorBuilder) {
+	return routeLocatorBuilder.routes()
+			.route(p -> p
+					.path("/meryilbank/accounts/**")
+					.filters( f -> f.rewritePath("/meryilbank/accounts/(?<segment>.*)","/${segment}")
+							.addResponseHeader("X-Response-Time", LocalDateTime.now().toString()))
+					.uri("lb://ACCOUNTS")) // eureka serverdaki mikroservis adı ne ise o olacak
+			.route(p -> p
+					.path("/meryilbank/loans/**")
+					.filters( f -> f.rewritePath("/meryilbank/loans/(?<segment>.*)","/${segment}")
+							.addResponseHeader("X-Response-Time", LocalDateTime.now().toString()))
+					.uri("lb://LOANS"))
+			.route(p -> p
+					.path("/meryilbank/cards/**")
+					.filters( f -> f.rewritePath("/meryilbank/cards/(?<segment>.*)","/${segment}")
+							.addResponseHeader("X-Response-Time", LocalDateTime.now().toString()))
+					.uri("lb://CARDS")).build();
+}
+
+şimdi ise hem "http://localhost:8072/accounts/api/fetch?mobileNumber=1234567670" hem de "http://localhost:8072/meryilbank/accounts/api/fetch?mobileNumber=1234567670" endpointleri ile istek atabiliriz.
+
+Tracing/Logging using GATEWAY;
+
+- Spring Cloud API Gateway'deki filters (filtreler), gelen ve giden HTTP isteklerini değiştirmek veya yönlendirmek için kullanılır. Filtreler, istekleri ve yanıtları inceleyerek güvenlik, doğrulama, yönlendirme, dönüşüm ve diğer işlevleri yerine getirebilir.
+
+Ne İşe Yarar?
+*Güvenlik: Kimlik doğrulama ve yetkilendirme işlemleri yapabilir.
+*Loglama & İzleme: Gelen ve giden istekleri izleyip loglayabilir.
+*Dönüştürme: İstek veya yanıt verilerini değiştirebilir (örn. JSON'dan XML'e çevirme).
+*Rate Limiting: Belirli bir süre içinde belirli bir sayıda isteğe izin verebilir.
+*Yönlendirme & Manipülasyon: URI değiştirme, başlık ekleme gibi işlemleri gerçekleştirebilir.
+
+
+- gatewayserver projemize "filters" adında bir paket ekliyoruz be bu pakete de FilterUtility, RequestTraceFilter ve ResponseTraceFilter sınıflarını içerisindeki konfigürasyonlar ile beraber ekliyoruz.
+
+FilterUtility;
+
+- Bu sınıf, HTTP isteklerinin başlıklarıyla (headers) ilgili bazı yardımcı işlevler sağlar ve correlation id (ilişkilendirme kimliği) gibi başlıkları yönetir. FilterUtility sınıfı, özellikle API Gateway veya servisler arası iletişimde kullanılan Correlation ID'yi alıp set etme işlemlerini yapar. Correlation ID, genellikle dağıtık sistemlerde her isteği izlemek ve hata ayıklamak için kullanılır.
+
+Özetle Ne Yapar?
+Correlation ID Okuma: Gelen isteklerdeki eazybank-correlation-id başlığını alır.
+Yeni Başlık Ekleme: İstek üzerine verilen başlık adını ve değerini ekler.
+Correlation ID Ekleme: Gelen isteğe ya da yeni oluşturulan isteğe correlation-id başlığı ekler.
+Bu sınıf, özellikle mikroservisler arasındaki isteklerin izlenebilirliğini artırmak için faydalıdır. Correlation ID, bir isteğin tüm yaşam döngüsünü takip etmek için kullanılır ve bu sınıf, bu başlıkla ilgili işlemleri yönetmek için basit bir yardımcı işlev sağlar.
+
+RequestTraceFilter;
+
+- Bu sınıf, Spring Cloud Gateway'de global bir filtre olarak çalışır ve her gelen HTTP isteğinde correlation-id başlığını yönetir. Amaç, gelen isteklerde correlation-id olup olmadığını kontrol etmek, yoksa yeni bir tane oluşturmak ve istek başlıklarına eklemektir. Ayrıca, loglama yaparak, her iki durumu da (başlık var mı, yoksa oluşturuldu) izler.
+
+Özetle Ne Yapar?
+Correlation ID Kontrolü:
+
+Her gelen istek için, correlation-id başlığının mevcut olup olmadığını kontrol eder.
+Eğer başlık varsa, var olan correlation-id'yi loglar.
+Eğer başlık yoksa, yeni bir correlation-id oluşturur, başlıklara ekler ve bunu loglar.
+Loglama:
+
+logger.debug() kullanarak, işlem sırasında correlation-id'nin mevcut olup olmadığını ve hangi correlation-id'nin kullanıldığını debug seviyesinde loglar.
+Correlation ID Ekleme:
+
+Eğer correlation-id yoksa, yeni bir UUID oluşturup istek üzerine ekler. Bu sayede dağıtık sistemlerdeki tüm işlemler izlenebilir hale gelir.
+Kullanım Senaryosu
+Mikroservis Mimarisi: Bir API Gateway üzerinden gelen isteklerin takip edilmesini sağlar. Eğer bir isteğin correlation-id'si yoksa, bu sınıf bir tane oluşturur ve böylece tüm sistemdeki mikroservisler arasında bu isteğin izlenebilirliğini artırır. Bu, hata ayıklama, izleme ve performans takibi için kritik olabilir.
+
+ResponseTraceFilter;
+
+- Bu sınıf, Spring Cloud Gateway'de gelen ve giden istekler için correlation-id başlığını işleyen bir GlobalFilter oluşturur. Özellikle, giden yanıtlara correlation-id başlığını ekler. ResponseTraceFilter sınıfı, isteklerin ardından yapılan işlemler için giden yanıt başlıklarına correlation-id ekleyerek, yanıtları da izlenebilir kılar.
+
+Özet
+Bu sınıf, her gelen isteğin yanıtına correlation-id başlığını ekleyerek, tüm sistemdeki işlemlerin izlenmesini sağlar. Yani, isteklerdeki correlation-id, yanıtlara da aktarılır ve sistemdeki bütün işlem adımları arasındaki ilişkiyi izlemeye yardımcı olur.
+
+- gatewayserver projemizde application.yml dosyasına detaylı logları görüntülemek için aşağıdaki konfigürasyonu ekliyoruz.
+
+logging:
+  level:
+    com:
+      meryilbank:
+        gatewayserver: DEBUG
+        
+
+- Daha sonra log konfigürasyonlarını diğer mikroservislere de (accounts, loans ve cards) a ekliyoruz.
+
+- Eklediğimiz konfigürasyon sonucu gatewayserver run terminalde aşağıdaki correlation-id
+loglarını görüyoruz.
+
+2025-03-18T15:43:51.932+03:00 DEBUG 32723 --- [gatewayserver] [or-http-epoll-5] c.m.g.filters.RequestTraceFilter         : meryilbank-correlation-id generated in RequestTraceFilter : 2b80f73b-225d-4f39-9cad-1661e4f16bb7
+2025-03-18T15:43:51.938+03:00 DEBUG 32723 --- [gatewayserver] [or-http-epoll-5] c.m.g.filters.ResponseTraceFilter        : Updated the correlation id to the outbound headers: 2b80f73b-225d-4f39-9cad-1661e4f16bb7
+2025-03-18T15:45:00.131+03:00 DEBUG 32723 --- [gatewayserver] [or-http-epoll-5] c.m.g.filters.RequestTraceFilter         : meryilbank-correlation-id generated in RequestTraceFilter : efdb2c96-e333-4b87-97df-fa6bad4b781c
+2025-03-18T15:45:00.349+03:00 DEBUG 32723 --- [gatewayserver] [or-http-epoll-5] c.m.g.filters.ResponseTraceFilter        : Updated the correlation id to the outbound headers: efdb2c96-e333-4b87-97df-fa6bad4b781c
+        
+Correlation ID;
+
+- Correlation ID (ilişkilendirme kimliği), dağıtık sistemlerde bir isteği, onunla ilişkili tüm işlemlerle takip etmek ve izlemek için kullanılan benzersiz bir tanımlayıcıdır. Özellikle mikroservis mimarilerinde, bir kullanıcının veya bir sistemin başlattığı işlem sırasındaki tüm adımların (istekler, yanıtlar, hata mesajları vb.) izlenebilmesi için kullanılır. Bu sayede bir işlem süreci boyunca farklı servisler arasında yapılan çağrılar birbirine bağlanabilir.
+
+- accounts, loans ve cards mikroservislerinin bazı controller fonksiyonlarına correlationId değişkenini ekliyoruz.
+
+Ör;
+@GetMapping("fetchCustomerDetails")
+public ResponseEntity<CustomerDetailsDto> fetchCustomerDetails(@RequestHeader("meryilbank-correlation-id") String correlationId,
+                                                           @RequestParam
+                                                           @Pattern(regexp = "(^$|[0-9]{10})", message = "Mobile number must be 10 digits")
+                                                           String mobileNumber) {
+logger.debug("meryilBank-correlation-id found: {} ", correlationId);
+CustomerDetailsDto customerDetailsDto = iCustomersService.fetchCustomerDetails(mobileNumber, correlationId);
+return ResponseEntity.status(HttpStatus.SC_OK).body(customerDetailsDto);
+}
+    
+Design Patterns Around API Gateway;
+    
+  
+
+
+
