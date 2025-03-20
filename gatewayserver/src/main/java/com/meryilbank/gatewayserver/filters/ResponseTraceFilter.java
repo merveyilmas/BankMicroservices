@@ -11,6 +11,7 @@ import reactor.core.publisher.Mono;
 
 @Configuration
 public class ResponseTraceFilter {
+    // ResponseTraceFilter sınıfı, isteklerin ardından yapılan işlemler için giden yanıt başlıklarına correlation-id ekleyerek, yanıtları da izlenebilir kılar.
 
     private static final Logger logger = LoggerFactory.getLogger(ResponseTraceFilter.class);
 

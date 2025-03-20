@@ -1379,7 +1379,7 @@ API Gateway;
 	</plugins>
 </build>
 
-- config repository sine gatewayserver.yml dosyasını ekliyoruz ve aşağıdaki konfigüreasyonları tanımlıyoruz.
+- config repository sine gatewayserver.yml dosyasını ekliyoruz ve aşağıdaki konfigürasyonları tanımlıyoruz.
 
 server:
   port: 8072
@@ -1394,7 +1394,7 @@ eureka:
       defaultZone: "http://localhost:8070/eureka/"
 
 
-- gatewayserver projesindeki application.yml dosyasına dad aşağıdaki konfigürasyonları ekliyoruz.
+- gatewayserver projesindeki application.yml dosyasına da aşağıdaki konfigürasyonları ekliyoruz.
 
 spring:
   application:
@@ -1560,6 +1560,81 @@ return ResponseEntity.status(HttpStatus.SC_OK).body(customerDetailsDto);
 }
     
 Design Patterns Around API Gateway;
+
+API Gateway Pattern;
+
+- API Gateway Pattern, mikro hizmet mimarisinde sıkça kullanılan bir tasarım desenidir. API Gateway, istemciler (mobil uygulamalar, web istemcileri vb.) ile mikro hizmetler arasında bir aracı katman olarak görev yapar. Temel amacı, istemcilerin doğrudan mikro hizmetlere erişmesini engelleyerek güvenliği, yönetilebilirliği ve performansı artırmaktır.
+
+API Gateway’in Çalışma Mekanizması
+İstemci, API Gateway’e HTTP isteği gönderir.
+API Gateway, isteği inceler, kimlik doğrulama gibi işlemleri gerçekleştirir.
+API Gateway, uygun mikro hizmete isteği yönlendirir ve yanıtı alır.
+Yanıt, API Gateway tarafından formatlanarak istemciye iletilir.
+
+Gateway Routing Pattern;
+
+- Gateway Routing Pattern, API Gateway’in gelen HTTP isteklerini uygun mikro hizmetlere yönlendirmesini (routing) sağlayan bir tasarım desenidir. Bu desen, API Gateway’in sadece bir proxy olarak çalışmasını değil, aynı zamanda gelen istekleri inceleyerek dinamik veya statik kurallara göre yönlendirme yapmasını içerir.
+
+📌 Gateway Routing Pattern’in Avantajları
+✅ Mikro hizmetlerin gizlenmesi → Dış dünyaya doğrudan açılmazlar.
+✅ İstek yönlendirme ve dönüştürme → API Gateway, ihtiyaca göre path veya parametreleri değiştirebilir.
+✅ Güvenlik ve doğrulama → JWT, OAuth gibi kimlik doğrulama mekanizmalarıyla entegre edilebilir.
+✅ Yük dengeleme (Load Balancing) → Gelen trafiği ölçeklenebilir şekilde farklı instancelara dağıtabilir.
+✅ Önbellekleme ve hızlandırma → Sık yapılan istekleri Gateway üzerinde cache’leyebilir.
+
+Gateway Offloading Pattern;
+
+- Gateway Offloading Pattern, API Gateway’in kimlik doğrulama, güvenlik, hız sınırlama (rate limiting), önbellekleme (caching) ve yük dengeleme (load balancing) gibi işlemleri üstlenmesini sağlayan bir tasarım desenidir. Bu sayede mikro hizmetler sadece iş mantığına odaklanır ve ekstra yükten kurtulmuş olur.
+
+📌 API Gateway Offloading Kullanım Senaryoları
+✅ Kimlik doğrulama (OAuth, JWT) mikro hizmetlerden alınır, Gateway’e yüklenir.
+✅ Rate limiting (Hız sınırlama) sayesinde DDoS saldırıları Gateway seviyesinde engellenir.
+✅ Mikro hizmetler sadece iş mantığına odaklanır, güvenlik ve yük yönetimi API Gateway’e devredilir.
+✅ Önbellekleme ile gereksiz istekler engellenir, performans artar.
+
+Backend for Frontend (BFF) Pattern;
+
+- Backend for Frontend (BFF) Pattern, farklı istemci türleri (web, mobil, IoT vb.) için özelleştirilmiş API'ler sunan bir backend katmanı oluşturmayı amaçlayan bir mimari desendir.
+
+Klasik API Gateway yaklaşımının aksine, her istemci (mobil/web) için ayrı bir backend servis çalıştırılır.
+
+📌 Neden BFF Kullanılır?
+Farklı istemcilerin ihtiyaçları farklıdır:
+
+Mobil uygulamalar daha az veri çeker, düşük gecikme ister.
+Web istemcileri daha geniş veri setlerine erişebilir.
+IoT cihazları genellikle hafif ve düşük güç tüketimli istekler yapar.
+BFF, her istemciye özel bir API sunarak gereksiz veri ve iş yükünü azaltır.
+
+📌 Sonuç
+🔹 Backend for Frontend Pattern, her istemciye özel API sunarak performans, ölçeklenebilirlik ve özelleştirme açısından büyük avantajlar sağlar.
+🔹 API Gateway yerine değil, onunla birlikte kullanılabilir!
+🔹 Özellikle büyük ölçekli projelerde, mobil ve web istemcileri arasında büyük farklılıklar varsa önerilir.
+
+Gateway Aggregator Pattern;
+
+- Gateway Aggregator Pattern (diğer adıyla Composition Pattern), API Gateway’in birden fazla mikro hizmetten gelen verileri toplayarak tek bir istemci yanıtı oluşturmasını sağlayan bir tasarım desenidir.
+
+Klasik mikro hizmet yaklaşımında, istemciler (mobil/web) farklı mikro hizmetlerden ayrı ayrı veri çekmek zorundadır. Bu durum:
+
+Ağ trafiğini artırır.
+İstemcinin fazladan iş yükü taşımasına neden olur.
+Gecikmeleri artırabilir.
+Gateway Aggregator Pattern, bu istekleri API Gateway üzerinden birleştirerek istemciye tek bir API çağrısı ile optimize edilmiş bir yanıt sunar.
+
+📌 Neden Gateway Aggregator Kullanılır?
+✅ Mikro hizmetler istemciden gizlenir.
+✅ İstemci daha az API çağrısı yapar.
+✅ Ağ trafiği azalır, performans artar.
+✅ Veri birleştirme (composition) API Gateway tarafından yapılır.
+✅ Mobil cihazlar için optimize edilmiş daha küçük yanıtlar sağlanabilir.
+
+📌 Gateway Aggregator Çalışma Mantığı
+1️⃣ İstemci, API Gateway'e tek bir istek yapar.
+2️⃣ API Gateway, farklı mikro hizmetlerden veri çeker.
+3️⃣ Verileri birleştirerek (compose) istemciye tek bir yanıt olarak döner.
+
+
     
   
 

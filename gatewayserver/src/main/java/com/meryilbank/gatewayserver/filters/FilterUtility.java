@@ -8,6 +8,7 @@ import java.util.List;
 
 @Component
 public class FilterUtility {
+    // Bu sınıf, HTTP isteklerinin başlıklarıyla (headers) ilgili bazı yardımcı işlevler sağlar ve correlation id (ilişkilendirme kimliği) gibi başlıkları yönetir.
 
     public static final String CORRELATION_ID = "meryilbank-correlation-id";
 

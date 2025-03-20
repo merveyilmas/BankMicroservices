@@ -14,6 +14,8 @@ import reactor.core.publisher.Mono;
 @Order(1)
 @Component
 public class RequestTraceFilter implements GlobalFilter{
+    // Bu sınıf, Spring Cloud Gateway'de global bir filtre olarak çalışır ve her gelen HTTP isteğinde correlation-id başlığını yönetir.
+    // Amaç, gelen isteklerde correlation-id olup olmadığını kontrol etmek, yoksa yeni bir tane oluşturmak ve istek başlıklarına eklemektir.
 
     private static final Logger logger = LoggerFactory.getLogger(RequestTraceFilter.class);
 
