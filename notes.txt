@@ -1635,8 +1635,236 @@ Gateway Aggregator Pattern, bu istekleri API Gateway üzerinden birleştirerek i
 3️⃣ Verileri birleştirerek (compose) istemciye tek bir yanıt olarak döner.
 
 
+Add Gatewayserver to Docker Compose File;
+
+- İlk olarak accounts, loans ve cards a ayakta olduklarını anlamak için docker comppose da aşağıdaki konfigürasyonu ekledik.
+
+healthcheck:
+	test: "curl --fail --silent localhost:9000/actuator/health/readiness | grep UP || exit 1"
+	interval: 10s
+	timeout: 5s
+	retries: 10
+	start_period: 10s
+
+- Ve gatewayserver için de docker compose dosyasına aşağıdaki yapılandırmayı ekledik.
+
+  gatewayserver:
+    image: "merveyilmas/gatewayserver:s9"
+    container_name: gatewayserver-ms
+    ports:
+      - "8072:8072"
+    depends_on:
+      accounts:
+        condition: service_healthy
+      loans:
+        condition: service_healthy
+      cards:
+        condition: service_healthy
+    environment:
+      SPRING_APPLICATION_NAME: "gatewayserver"
+    extends:
+      file: common-config.yml
+      service: microservice-eureka-config
+
+
+MAKING MICROSERVICE RESIELLIENT(Dayanıklı);
+
+Resilience4j;
+- Resilience4j, Java için geliştirilmiş, mikroservis mimarilerinde yaygın olarak kullanılan hata toleransı (fault tolerance) sağlayan hafif (lightweight) bir kütüphanedir.
+
+📌 Temel Amacı Nedir?
+Dağıtık sistemlerde oluşabilecek gecikmeleri, başarısızlıkları veya yoğun yükleri yönetilebilir hale getirmek.
+
+🔧 Resilience4j'nin Sağladığı Temel Modüller
+Modül	Açıklama
+Circuit Breaker: Hatalı çalışan sistem çağrılarını keserek sistemi korur.
+Rate Limiter: Belirli bir zaman aralığında yapılabilecek çağrı sayısını sınırlar.
+Retry:	Hata alan işlemleri otomatik olarak yeniden denemeyi sağlar.
+Bulkhead: Kaynak izolasyonu sağlar. Bir servisteki yoğunluk diğerini etkilemez.
+TimeLimiter: Maksimum çalıştırma süresi belirler, süresi dolan çağrılar iptal edilir.
+Cache: Yanıtları önbelleğe alarak tekrar hesaplamayı engeller.
+
+🧠 Örnek Senaryo: Circuit Breaker
+-Bir mikroservis başka bir servise çağrı yapıyor ve karşı servis sık sık hata veriyorsa:
+
+*İlk başta Resilience4j bu hataları kaydeder.
+*Belirli bir eşik aşıldığında, circuit "open" hale gelir ve çağrılar hemen kesilir.
+*Bir süre sonra sistem tekrar "half-open" moda geçer, test çağrıları yapılır.
+*Eğer servis iyileştiyse tekrar "closed" moda döner.
+
+
+Implementing Circuit Breaker pattern in Gateway;
+
+- gatewayserver projesinde pom.xml dosyasına aşağıdaki bağımlılığı ekliyoruz.
+
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+</dependency>
+
+- GatewayserverApplication sınıfında "accounts" router ına ".circuitBreaker(config -> config.setName("accountsCircuitBreaker")))" config i ekliyoruz.
+
+.route(p -> p
+	.path("/meryilbank/accounts/**")
+	.filters( f -> f.rewritePath("/meryilbank/accounts/(?<segment>.*)","/${segment}")
+			.addResponseHeader("X-Response-Time", LocalDateTime.now().toString())
+			.circuitBreaker(config -> config.setName("accountsCircuitBreaker")))
+	.uri("lb://ACCOUNTS")) // eureka serverdaki mikroservis adı ne ise o olacak
+
+- Daha sonra gatewayserver application.yml dosyasına circuitbreaker configürasyonunu ekliyoruz.
+
+resilience4j.circuitbreaker:
+  configs:
+    default:
+      slidingWindowSize: 10
+      permittedNumberOfCallsInHalfOpenState: 2
+      failureRateThreshold: 50
+      waitDurationInOpenState: 10000
+
+- Postman den circuit breakers durumunu kontrol edebilirsin:
+
+http://localhost:8072/actuator/circuitbreakers
+http://localhost:8072/actuator/circuitbreakerevents?name=accountsCircuitBreaker
+
+Send callback to customer;
+- Hata oluştuğunda kullanıcıya hata ile ilgili geri dönüş yapmak için gatewayserver a "FallbackController" sınıfı ekliyoruz. Burada support team e hata maili vb. gönderebiliriz istersek.
+
+@RestController
+public class FallbackController {
+
+    @RequestMapping("/contactSupport")
+    public Mono<String> contactSupport() {
+        // you can send the email which inside an error to support team
+        return Mono.just("An error occurred. Please try after some time or contact support team!!!");
+    }
+}
+
+- GatewayserverApplication da accounts router ına ".setFallbackUri("forward:/contactSupport")" fallback uri ekliyoruz.
+
+.route(p -> p
+	.path("/meryilbank/accounts/**")
+	.filters( f -> f.rewritePath("/meryilbank/accounts/(?<segment>.*)","/${segment}")
+			.addResponseHeader("X-Response-Time", LocalDateTime.now().toString())
+			.circuitBreaker(config -> config.setName("accountsCircuitBreaker")
+					.setFallbackUri("forward:/contactSupport")))
+
+
+Implementing Circuit Breaker pattern with FeignClient;
+
+- Accounts mikroservisinde aşağıdaki bağımlılığı ekliyoruz:
+
+<dependency>
+	<groupId>org.springframework.cloud</groupId>
+	<artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+</dependency>
+
+- Daha sonra "application.yml" dosyasına aşağıdaki konfigürasyonu ekliyoruz:
+
+spring:
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+
+- circuirbreaker konfigürasyonunu da ekliyoruz:
+
+resilience4j.circuitbreaker:
+  configs:
+    default:
+      slidingWindowSize: 10
+      permittedNumberOfCallsInHalfOpenState: 2
+      failureRateThreshold: 50
+      waitDurationInOpenState: 10000
+
+Circuitbreaker for Feign Clients;
+
+- Account mikroservisinde service.client paketi altına "CardsFallback" ve "LoansFallback"  sınıflarını ekliyoruz:
+
+@Component
+public class CardsFallback implements CardsFeignClient{
+
+    @Override
+    public ResponseEntity<CardsDto> fetchCardDetails(String correlationId, String mobileNumber) {
+        //buraya card mikroservisi hata alması durumunda yapmak istediklerini yazabilirsin
+        return null;
+    }
+}
+
+@Component
+public class LoansFallback implements LoansFeignClient {
+
+    @Override
+    public ResponseEntity<LoansDto> fetchLoanDetails(String correlationId, String mobileNumber) {
+        return null;
+    }
+}
+
+- "CardsFeignClient" ve "LoansFeignClient" interfacelerine ise @FeignClient anatasyonuna fallback parametresi ekle.
+
+@FeignClient(name="cards",fallback = CardsFallback.class)
+@FeignClient(name="loans",fallback = LoansFallback.class)
+
+- "CustomerServiceImpl" sınıfında "CardsFeignClient" ve "LoansFeignClient" sınıflarını çağırdığımız yerde null check kontrolü ekliyoruz.
+
+
+HTTP TIMEOUT CONFIGURATIONS;
+
+- Tüm mikroservisler için gateway servisinin application.yml dosyasına timeout konfigürasyonlarını ekliyoruz. Eklemezsek 30 sn servisin cevap vermesini bekleriz. Eğer "GatewayserverApplication" sınıfında özel circuitBreaker konfigürasyonu eklemezsek router kısmında bu genel timeout süreleri geçerli olur.
+
+spring:
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 1000
+        response-timeout: 5s
+        
+
+🔧 Retry Pattern Nedir?
+Bir işlem (örneğin bir HTTP isteği, veritabanı çağrısı, uzak servis iletişimi) başarısız olduğunda, hemen hata döndürmek yerine belirli bir süre ve sayı kadar tekrar denenmesidir.
+
+📌 Ne zaman kullanılır?
+Geçici ağ sorunları
+
+-Anlık yoğunluk nedeniyle başarısız olan istekler
+-Dış sistemin kısa süreli erişilemez durumda olması
+-Timeout’lar veya HTTP 5xx hataları gibi durumlar
+
+Implementing Retry pattern in Gateway;
+
+- Gateway mikroservisinde GatewayserverApplication sınıfında loans mikroservis router ına retry konfigürasyonlarını ekliyoruz.
+
+.route(p -> p
+	.path("/meryilbank/loans/**")
+	.filters( f -> f.rewritePath("/meryilbank/loans/(?<segment>.*)","/${segment}")
+			.addResponseHeader("X-Response-Time", LocalDateTime.now().toString())
+			.retry(retryConfig -> retryConfig.setRetries(3)
+					.setMethods(HttpMethod.GET)
+					.setBackoff(Duration.ofMillis(100),Duration.ofMillis(1000),2,true)))
+	.uri("lb://LOANS"))
+
+
+Implementing Retry pattern in accounts microservice;
+
+- AccountsController a konfgürasyon eklemek istediğimiz apiye @Retry anatasyonunu ve ilgili fallback metodunu ekliyoruz.
+
+ @Retry(name = "getBuildInfo",fallbackMethod = "getBuildInfoFallback")
+    @GetMapping("/build-info")
+    public ResponseEntity<String> getBuildInfo() {
+        return ResponseEntity.status(HttpStatus.OK).body(buildVersion);
+    }
+
+    public ResponseEntity<String> getBuildInfoFallback(Throwable throwable) {
+        logger.debug("getBuildInfoFallback() method Invoked");
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body("0.9");
+    }
     
-  
+- Gateway mikroservisine yukarıda tanımladığımız retry fallback i için aşağıdaki konfigürasyon fonksiyonunu "GatewayserverApplication" sınıfına tanımlıyoruz. İlgili apiye istek atıp denemeler sonucu hala hata alırsak getBuildInfoFallback fonksiyonunda tanımladığımız "0.9" yanıtını cevap olarak alırız.
 
-
-
+@Bean
+public Customizer<ReactiveResilience4JCircuitBreakerFactory> defaultCustomizer() {
+	return factory -> factory.configureDefault(id -> new Resilience4JConfigBuilder(id)
+			.circuitBreakerConfig(CircuitBreakerConfig.ofDefaults())
+			.timeLimiterConfig(TimeLimiterConfig.custom().timeoutDuration(Duration.ofSeconds(4)).build()).build());
+	}
