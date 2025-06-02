@@ -1868,3 +1868,153 @@ public Customizer<ReactiveResilience4JCircuitBreakerFactory> defaultCustomizer()
 			.circuitBreakerConfig(CircuitBreakerConfig.ofDefaults())
 			.timeLimiterConfig(TimeLimiterConfig.custom().timeoutDuration(Duration.ofSeconds(4)).build()).build());
 	}
+	
+
+- Postmandan istek attığımızda retry pattern i uyguladığımız için response header kısmında istek atılan kadar correlation id bulunuyordu. Bunu önlemek için gateway server da "ResponseTraceFilter" sınıfında "postGlobalFilter" fonksiyonuna aşağıdaki koşulu ekliyoruz.
+
+  if(!(exchange.getResponse().getHeaders().containsKey(filterUtility.CORRELATION_ID))) {
+    logger.debug("Updated the correlation id to the outbound headers: {}", correlationId);
+    exchange.getResponse().getHeaders().add(filterUtility.CORRELATION_ID, correlationId);
+}
+
+
+Rate Limitter Pattern;
+
+Rate Limiter Pattern (Hız Sınırlama Deseni), bir sistemin belirli bir zaman aralığında alabileceği maksimum istek (request) sayısını sınırlandıran bir yük yönetim (throttling) desenidir.
+
+🔧 Rate Limiter Pattern Nedir?
+- Bir servis ya da sistem belirli bir trafik limitine sahiptir. Bu desende:
+- Belirlenen sınır aşılırsa, gelen istekler geçici olarak engellenir veya hata döner.
+- Sistem böylece çökmekten korunur, kaynaklar tükenmez ve adil kullanım sağlanır.
+
+📌 Ne zaman kullanılır?
+- DDOS gibi aşırı yük durumlarına karşı koruma
+- Ortak kullanılan (shared) servislerin adil paylaşımı
+- API’lerin aşırı tüketilmesini engellemek
+- Mikroservisler arası çağrılarda geri basınç (back pressure) oluşturmak için
+
+Implementing Rate Limitter pattern in Gateway Server;
+
+- pom.xml e aşağıdaki bağımlılığı ekliyoruz.
+
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-data-redis-reactive</artifactId>
+</dependency>
+
+
+- "GatewayserverApplication" sınıfına aşağıdaki iki bean i ekliyoruz.
+
+@Bean
+public RedisRateLimiter redisRateLimiter() {
+	return new RedisRateLimiter(1, 1, 1);
+}
+
+@Bean
+KeyResolver userKeyResolver() {
+	return exchange -> Mono.justOrEmpty(exchange.getRequest().getHeaders().getFirst("user"))
+			.defaultIfEmpty("anonymous");
+}
+
+- "GatewayserverApplication" sınıfında cards router ına requestRateLimiter config ini ekliyoruz.
+
+.route(p -> p
+	.path("/meryilbank/cards/**")
+	.filters( f -> f.rewritePath("/meryilbank/cards/(?<segment>.*)","/${segment}")
+			.addResponseHeader("X-Response-Time", LocalDateTime.now().toString())
+			.requestRateLimiter(config -> config.setRateLimiter(redisRateLimiter())
+					.setKeyResolver(userKeyResolver())))
+	.uri("lb://CARDS")).build();
+	
+
+- application.yml a aşağıdaki konfigürasyonu ekliyoruz.
+
+spring:
+  data:
+    redis:
+      connect-timeout: 2s
+      host: localhost
+      port: 6379
+      timeout: 1s
+       
+Implementing Rate Limitter pattern in accounts microservice;
+
+- AccountsController ında getJavaVersion fonksiyonuna rate limitter ı uyguluyoruz aşağıdaki gibi;
+
+@RateLimiter(name= "getJavaVersion", fallbackMethod = "getJavaVersionFallback")
+@GetMapping("/java-version")
+public ResponseEntity<String> getJavaVersion() {
+return ResponseEntity.status(HttpStatus.OK).body(environment.getProperty("JAVA_HOME"));
+}
+
+public ResponseEntity<String> getJavaVersionFallback(Throwable throwable) {
+return ResponseEntity
+        .status(HttpStatus.OK)
+        .body("Java 21");
+}
+
+
+- application.yml a aşağıdaki konfigürasyonu ekliyoruz.
+      
+resilience4j.ratelimiter:
+  configs:
+    default:
+      timeoutDuration: 1000
+      limitRefreshPeriod: 5000
+      limitForPeriod: 1
+  
+NOTE;
+- Docker da redis servisi ayağa kaldırıyoruz.
+
+
+Rate Limitter Pattern Testi için Apache Benchmark kullanıyoruz;
+
+Kurulum;
+sudo apt update
+sudo apt install apache2-utils
+
+- Aşağıdaki komut ile terminal ekranından istek atıyoruz;
+ab -n 10 -c 2 -v 3 http://localhost:8072/meryilbank/cards/api/contact-info
+
+Apache Benchmark (ab) Nedir?
+
+-Apache Benchmark (ab), web uygulamanızın performansını test etmek için kullanılan hafif ve basit bir yük testi aracıdır. Genellikle bir web sunucusunun veya REST API'nin eşzamanlı istekleri nasıl karşıladığını ölçmek için kullanılır.
+
+🔧 Ne İşe Yarar?
+Apache Benchmark şu sorulara yanıt verir:
+
+- Sunucum saniyede kaç isteği karşılayabiliyor?
+- Yüksek trafikte sistem ne kadar dayanıklı?
+- Ortalama yanıt süresi ne kadar?
+- Eş zamanlı bağlantılarda performans düşüyor mu?
+
+📘 Temel Komut;
+ab -n 1000 -c 10 http://localhost:8080/endpoint
+
+Anlamı:
+-n 1000: Toplam 1000 istek gönder.
+-c 10: Aynı anda 10 isteği paralel gönder.
+URL: Test etmek istediğin endpoint.
+
+
+Bulkhead Pattern Nedir?
+      
+Bulkhead Pattern (Bölme Deseni), bir uygulamada sistem kaynaklarını izole ederek, bir bileşenin çökmesinin diğer bileşenleri etkilemesini önleyen bir hata toleransı desenidir.
+
+🧱 1. Bulkhead Pattern Nedir?
+Bu desenin adı, gemi mühendisliğinden gelir:
+Gemilerde bölmeler (bulkhead) kullanılarak bir bölüm su alırsa diğer bölümler etkilenmesin diye izolasyon sağlanır.
+
+Yazılımda da aynı şekilde:
+Bir servis veya iş parçası aşırı yük altına girerse, diğer servislerin de çökmesini engellemek için izole edilir.
+
+🎯 2. Ne Zaman Kullanılır?
+- Mikroservis mimarisinde servislerin birbirinden etkilenmemesi isteniyorsa
+- Yoğun yük altında bir bileşenin diğer işlevleri bloke etmesini istemiyorsan
+- Bir sistemde farklı önem derecesine sahip işlemler varsa (örneğin kritik vs arka plan işlemleri)
+
+
+
+
+
+
