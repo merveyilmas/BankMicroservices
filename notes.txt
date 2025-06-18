@@ -2014,7 +2014,244 @@ Bir servis veya iş parçası aşırı yük altına girerse, diğer servislerin 
 - Bir sistemde farklı önem derecesine sahip işlemler varsa (örneğin kritik vs arka plan işlemleri)
 
 
+MICROSERVICES SECURITY;
+
+🔐 Spring Security Nedir?
+Spring Security, web ve servis tabanlı Java uygulamalarında güvenlik ihtiyaçlarını karşılamak için kullanılan bir kütüphanedir. En yaygın kullanım alanları:
+
+- Kimlik doğrulama (Login işlemi)
+- Yetkilendirme (Roller bazında erişim kontrolü)
+- CSRF, CORS, Session Management gibi güvenlik önlemleri
+- JWT, OAuth2 gibi modern güvenlik protokolleriyle entegrasyon
+
+1. Authentication (Kimlik Doğrulama)
+- Kullanıcının kim olduğunu kontrol eder.
+- Kullanıcı adı / şifre kontrolü
+- LDAP, veritabanı, OAuth gibi kaynaklardan doğrulama yapılabilir.
+
+2. Authorization (Yetkilendirme)
+Kimin neye erişebileceğine karar verir.
+- /admin/** URL’sine sadece "ADMIN" rolündeki kullanıcı erişebilir gibi kurallar tanımlanabilir.
+
+🔐 Gelişmiş Konular
+- JWT ile token tabanlı authentication
+- OAuth2 ile Google, Facebook gibi sağlayıcılardan giriş
+- CORS ve CSRF korumaları
+- HTTPS zorlama, session sabitleme koruması
+
+🔑 OAuth2 Nedir?
+OAuth2, bir uygulamanın (client) başka bir uygulamadaki (resource server) kullanıcının verilerine erişebilmesini, kullanıcının şifresini paylaşmadan sağlar.
+
+👉 Amaç: “Bir uygulamaya, başka bir sistemdeki hesabınızla (örneğin Google, GitHub) giriş izni vermek.”
+
+🧭 Temel Bileşenler
+Bileşen	- Görev
+* Resource Owner :	Kullanıcı (verilerin sahibi)
+* Client :		Erişim isteyen uygulama (senin uygulaman)
+* Authorization Server: Yetkilendirmeyi yapan sunucu (örneğin Google)
+* Resource Server :	Korunan verilerin olduğu sunucu (örneğin Google API)
+* Scopes : 		Access token’ın neyi yapmaya yetkili olduğunu belirler.
+
+🔁 Akış (Authorization Code Flow – En yaygın)
+1. Kullanıcı giriş yapar ve client (uygulama) kendisini authorization server’a yönlendirir.
+2. Kullanıcı izin verir (örnek: "Bu uygulamanın profil bilgilerinize erişmesine izin veriyor musunuz?").
+3. Authorization Server, uygulamaya authorization code gönderir.
+4. Uygulama bu kodla, access token alır.
+5. Uygulama artık bu access token ile kullanıcının verilerine erişebilir (örneğin e-posta adresi, profil bilgisi).
 
 
+OpenID Connect (OIDC) Nedir?
+
+OpenID Connect, bir kullanıcının kimliğini güvenli bir şekilde doğrulamak için kullanılır.
+Kullanıcı bir sağlayıcıya (örneğin Google, Keycloak) giriş yapar, ardından uygulamaya bu kullanıcı hakkında kimlik bilgilerini içeren bir ID Token gönderilir.
+
+🔐 OAuth 2.0 → Yetkilendirme (authorization)
+🙋‍♀️ OpenID Connect → Kimlik doğrulama (authentication)
+
+🔑 OpenID Connect ve OAuth2 Farkı
+
+Özellik			OAuth 2.0				OpenID Connect
+Amaç			Yetkilendirme (izin)			Kimlik doğrulama (login)
+Token			Access Token				Access Token + ID Token
+Kullanıcı Bilgisi	İçermez					ID Token ile kullanıcı bilgisi içerir
+Destek			Google, Microsoft, Keycloak, Auth0, vs.	Hepsi destekler
+
+🔐 ID Token Nedir?
+
+- JWT (JSON Web Token) formatındadır.
+- Kullanıcının kimlik bilgilerini içerir:
+{
+  "sub": "1234567890",
+  "name": "Merve Yılmaz",
+  "email": "merve@example.com",
+  "iss": "https://accounts.google.com",
+  "aud": "client-id",
+  "exp": 1717333430
+}
+
+🧩 OpenID Connect Akışı (Authorization Code Flow);
+
+1. Uygulama, kullanıcısını bir OpenID Provider’a yönlendirir.
+2. Kullanıcı giriş yapar ve izin verir.
+3. Uygulama, authorization code alır.
+4. Bu kodla:
+* Access Token
+* ID Token alınır.
+5. ID Token, kullanıcının kim olduğunu temsil eder.
 
 
+Keyclock Nedir?
+
+Keycloak, açık kaynaklı bir kimlik ve erişim yönetim (IAM) çözümüdür. Kullanıcı kimlik doğrulama, yetkilendirme, tek oturum açma (SSO), LDAP entegrasyonu, sosyal giriş (Google, Facebook vs.) gibi güvenlik işlemlerini merkezi bir yerden yönetmek için kullanılır.
+
+🔐 Keycloak Ne İşe Yarar?
+- Bir uygulama veya mikroservis mimarisi geliştirirken aşağıdaki işlevleri sağlar:
+
+1. Kullanıcı Kimlik Doğrulama (Authentication)
+- Kullanıcı adı/parola, OTP, sosyal giriş gibi yöntemlerle kullanıcıyı doğrular.
+
+2. Yetkilendirme (Authorization)
+- Hangi kullanıcının hangi kaynağa erişebileceğini belirler.
+- Rol tabanlı (RBAC) veya kaynak tabanlı (ABAC) yetkilendirme desteği sunar.
+
+3. Single Sign-On (SSO)
+- Kullanıcı bir kere giriş yaptığında diğer uygulamalara yeniden giriş yapmasına gerek kalmaz.
+
+4. Kullanıcı Yönetimi
+- Kayıt, parola sıfırlama, e-posta onayı, kullanıcı profili yönetimi gibi işlemleri yönetim panelinden sağlar.
+
+5. OAuth2 / OpenID Connect / SAML2.0 desteği
+- Modern kimlik protokollerini destekler, yani REST API'lerde veya modern frontend/backend sistemlerde kolayca entegre edilebilir.
+
+🔧 Örnek Entegrasyon
+Diyelim ki bir Spring Boot uygulaman var:
+
+- Uygulamanı OAuth2 client olarak yapılandırırsın.
+- Kullanıcı giriş yaptığında Keycloak login sayfasına yönlenir.
+- Başarılı giriş sonrası Keycloak, uygulamana bir access token gönderir.
+- Uygulaman bu token’ı doğrular ve kullanıcıya özel veriler gösterilir.
+
+
+Client Credentials Grant Type Flow Nedir?;
+
+- Client Credentials Grant Type (Flow), OAuth 2.0 yetkilendirme protokolünün bir türüdür. Bu akış, kullanıcı olmayan senaryolarda, yani bir sistemin (uygulamanın) başka bir sistemle iletişim kurarken kullanıcıdan bağımsız olarak token alması gereken durumlarda kullanılır.
+
+🔑 Client Credentials Grant Type Nedir?
+- Bu akışta, kendi kimliğini kanıtlayan bir istemci (client), access token alır. Burada kullanıcı (resource owner) yoktur.
+
+* Örnek Senaryo:
+Bir mikroservisin (örneğin PaymentService) başka bir mikroservisle (örneğin OrderService) haberleşmesi gerektiğinde kullanılır. Her iki servis de bir kullanıcı adına değil, kendi adına işlem yapar.
+
+🔁 Akış (Flow):
+1. Client, kendisine ait client_id ve client_secret ile Token Endpoint'e bir HTTP POST isteği yapar.
+2. grant_type=client_credentials olarak belirtilir.
+3. Authorization Server (örneğin Keycloak), kimlik bilgilerini doğrular.
+4. Doğruysa, Access Token döner.
+5. Client bu access token'ı API çağrılarında Authorization header'da kullanır:
+Authorization: Bearer <access_token>
+
+🎯 Kullanım Alanları
+- Mikroservisler arası iletişim
+- Sistem-otomasyon işlemleri
+- Arka plan servisleri
+- Cron job'lar veya arka plan görevlerinde
+
+❌ Kullanılmamalı:
+- Kullanıcı bazlı işlemler için (örneğin kullanıcı bilgisiyle işlem yapmak)
+- Kullanıcının kaynağına erişim gerekiyorsa
+
+
+Securing Gateway server using Client Credentials grant type flow;
+
+- External service -> Auth server (keyclock)
+- External service -> Gateway Service -> Auth server (keyclock) (token doğrulama için) -> (doğru token ise) Accounts/Loans/Cards microservice
+
+
+Setup Auth server using KeyCloak;
+
+- Keyclock websitesinde kurulum seçenekleri mevcut. Biz docker kurulumunu kullanacağız. Aşağıdaki docker komutu ile çalıştırıyoruz 7080 posrtunda;
+
+docker run -d -p 7080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin quay.io/keycloak/keycloak:26.2.5 start-dev
+
+
+- http://localhost:7080/ adresinde keyclock auth server ayağa kalkmış olur.
+
+- Sol köşede "Clients" menüsünden "create client" ile yeni bir client ekliyoruz.
+
+Client ID : meryilbank-callcenter-cc
+Name : MeryilBank Call Center App
+Description : MeryilBank Call Center App
+
+- Yukarıdaki bilgileri girdikten sonra next butonuna tıklıyoruz. Gelen sayfada "Client authentication" seçeneğini "on" yapıyoruz. "Authentication flow" kısmında ise sadece "Service accounts roles" alanı seçili olacak. Gelecek sayfada bulunan "Root URL" ve "Home URL" alanlarını boş bırakıyoruz ve bilgileri kayıt ediyoruz. 
+
+
+Getting Access token from Auth Server in Client credentials grant flow;
+
+- Ceyclock Administrator sayfasında "Configure" başlığında "Realm Settings" bölümündeki "OpenID Endpoint Configuration" dosyasını açıyoruz. 
+
+- Dökümanda bulunan token_endpoint": "http://localhost:7080/realms/master/protocol/openid-connect/token" kısmı bizim token endpointimizdir. End pointi postman a yapıştırıyoruz. İstek türümüz "POST" olacak.
+
+- Daha sonra postmanda "Body" kısmından "x-www-form-urlencoded" bölümüne aşağıdaki parametreleri tanımlıyoruz.
+
+grant_type : client_credentials (dökümandaki grant_types_supported alanında tipler var)
+client_id : meryilbank-callcenter-cc (oluşturduğumuz client id)
+client_secret : <secret_key> (oluşturduğumuz client ın secret i)
+scope : openid email profile (client scopes bölümündeki tanımlı scope lar)
+
+- Yukarıdaki bilgiler ile postmanda istek attığımızda "access_token" ve "id_token" a ulaşırız.
+
+- https://jwt.io/ adresinden ise jwt token ımızı decode edebiliriz.
+
+
+Securing Gateway server as a Resource server;
+
+- Gateway serverda pom.xml e security için aşağıdaki dependencyleri ekliyoruz.
+
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.springframework.security</groupId>
+	<artifactId>spring-security-oauth2-resource-server</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.springframework.security</groupId>
+	<artifactId>spring-security-oauth2-jose</artifactId>
+</dependency>
+
+
+- Daha sonra config isminde yeni bir paket oluşturup SecurityConfig class ını oluşturuyoruz. Ve içine springSecurityFilterChain fonksiyonunu tanımlıyoruz.
+
+@Configuration
+@EnableWebFluxSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity serverHttpSecurity) {
+        serverHttpSecurity.authorizeExchange(exchanges -> exchanges.pathMatchers(HttpMethod.GET).permitAll()
+                        .pathMatchers("/meryilbank/accounts/**").hasRole("ACCOUNTS")
+                        .pathMatchers("/meryilbank/cards/**").hasRole("CARDS")
+                        .pathMatchers("/meryilbank/loans/**").hasRole("LOANS"))
+                .oauth2ResourceServer(oAuth2ResourceServerSpec -> oAuth2ResourceServerSpec
+                        .jwt(jwtSpec -> jwtSpec.jwtAuthenticationConverter(grantedAuthoritiesExtractor())));
+        serverHttpSecurity.csrf(csrfSpec -> csrfSpec.disable());
+        return serverHttpSecurity.build();
+    }
+
+}
+
+- Ardından application.yml dosyasına aşağıdaki configürasyonu ekliyoruz. Url i keyclock admin panelindeki openid-config dosyasındaki jwks_uri": "http://localhost:7080/realms/master/protocol/openid-connect/certs", alanından alıyoruz.
+
+🔐 jwk-set-uri Nedir?
+- JWT token’ları imzalanmış birer JSON’dur.
+- Resource Server, bu imzaları doğrulamak için public key'e ihtiyaç duyar.
+- Bu endpoint (jwk-set-uri) ile o public key'leri çeker.
+- Yani: JWT token’ı doğrulamak için bu URI'deki sertifikalara (public key) başvurulur.
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: "http://localhost:7080/realms/master/protocol/openid-connect/certs"
