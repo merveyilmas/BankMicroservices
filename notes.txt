@@ -2178,7 +2178,8 @@ docker run -d -p 7080:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_
 
 - Sol köşede "Clients" menüsünden "create client" ile yeni bir client ekliyoruz.
 
-Client ID : meryilbank-callcenter-cc
+Client type : OpenID Connect
+Client ID : meryilbank-callcenter-cc (cc -> client credentials)
 Name : MeryilBank Call Center App
 Description : MeryilBank Call Center App
 
@@ -2230,11 +2231,11 @@ public class SecurityConfig {
     @Bean
     public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity serverHttpSecurity) {
         serverHttpSecurity.authorizeExchange(exchanges -> exchanges.pathMatchers(HttpMethod.GET).permitAll()
-                        .pathMatchers("/meryilbank/accounts/**").hasRole("ACCOUNTS")
-                        .pathMatchers("/meryilbank/cards/**").hasRole("CARDS")
-                        .pathMatchers("/meryilbank/loans/**").hasRole("LOANS"))
+                        .pathMatchers("/meryilbank/accounts/**").authenticated()
+                        .pathMatchers("/meryilbank/cards/**").authenticated()
+                        .pathMatchers("/meryilbank/loans/**").authenticated()
                 .oauth2ResourceServer(oAuth2ResourceServerSpec -> oAuth2ResourceServerSpec
-                        .jwt(jwtSpec -> jwtSpec.jwtAuthenticationConverter(grantedAuthoritiesExtractor())));
+                        .jwt(Customizer.withDefaults()));
         serverHttpSecurity.csrf(csrfSpec -> csrfSpec.disable());
         return serverHttpSecurity.build();
     }
@@ -2255,3 +2256,134 @@ spring:
       resourceserver:
         jwt:
           jwk-set-uri: "http://localhost:7080/realms/master/protocol/openid-connect/certs"
+          
+- Artık postmandan get harici istek türlerine istek atarken token kullanmamız gerekiyor. Authorization kısmından OAuth 2.0 tipini seçerek ilgili yerleri doldurarak istek atmalıyız. Yoksa 403 hatası alırız.
+
+
+Implement Authorization inside Gateway server using Roles;
+
+- Şimdi ise yetkilendirme işlemlerine geçiyoruz. SecurityConfig sınıfında springSecurityFilterChain fonksiyonuna aşağıdaki gibi role atama işlemleri gerçekleştiriyoruz.
+
+@Bean
+    public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity serverHttpSecurity) {
+        serverHttpSecurity.authorizeExchange(exchanges -> exchanges.pathMatchers(HttpMethod.GET).permitAll() // Tüm GET isteklerine izin ver
+                        .pathMatchers("/meryilbank/accounts/**").hasRole("ACCOUNTS")
+                        .pathMatchers("/meryilbank/cards/**").hasRole("CARDS")
+                        .pathMatchers("/meryilbank/loans/**").hasRole("LOANS"))
+                .oauth2ResourceServer(oAuth2ResourceServerSpec -> oAuth2ResourceServerSpec
+                        .jwt(Customizer.withDefaults()));
+        serverHttpSecurity.csrf(csrfSpec -> csrfSpec.disable());
+        return serverHttpSecurity.build();
+    }
+
+-  Keyclock admin panelinden oluşturduğumuz client için role ekleyeceğiz. Realm roles bölümünden "create role" butonu ile role ekleyebiliriz.
+
+Accounts için;
+Role name : ACCOUNTS
+Description : Accounts Role
+
+- Aynı işlemleri diğer (cards ve loans) servisleri içinde yapıyoruz. 
+- Daha sonra oluşturduğumuz rolleri client ımıza atıyoruz. 
+
+Clients -> Service accounts roles -> Assign role (!Filter by realm roles)
+
+- Daha sonra config paketi altına "KeycloakRoleConverter" isminde bir sınıf ekliyoruz. Bu sınıf istek atarken kullandığımız jwt token dan "role" bilgilerini ayrıştırmamızı sağlar.
+
+- Jwt token ımızın içerdiği bilgileri https://jwt.io/ adresinden görebiliriz.
+
+public class KeycloakRoleConverter  implements Converter<Jwt, Collection<GrantedAuthority>> {
+
+    @Override
+    public Collection<GrantedAuthority> convert(Jwt source) {
+        Map<String, Object> realmAccess = (Map<String, Object>) source.getClaims().get("realm_access");
+        if (realmAccess == null || realmAccess.isEmpty()) {
+            return new ArrayList<>();
+        }
+        Collection<GrantedAuthority> returnValue = ((List<String>) realmAccess.get("roles"))
+                .stream().map(roleName -> "ROLE_" + roleName)
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toList());
+        return returnValue;
+    }
+
+}
+
+- Daha sonra SecurityConfig sınıfına grantedAuthoritiesExtractor fonksiyonunu ekliyoruz ve springSecurityFilterChain fonksiyonunda çağırıyoruz.
+
+    @Bean
+    public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity serverHttpSecurity) {
+        serverHttpSecurity.authorizeExchange(exchanges -> exchanges.pathMatchers(HttpMethod.GET).permitAll() // Tüm GET isteklerine izin ver
+                        .pathMatchers("/meryilbank/accounts/**").hasRole("ACCOUNTS")
+                        .pathMatchers("/meryilbank/cards/**").hasRole("CARDS")
+                        .pathMatchers("/meryilbank/loans/**").hasRole("LOANS"))
+                .oauth2ResourceServer(oAuth2ResourceServerSpec -> oAuth2ResourceServerSpec
+                        .jwt(jwtSpec -> jwtSpec.jwtAuthenticationConverter(grantedAuthoritiesExtractor())));
+        serverHttpSecurity.csrf(csrfSpec -> csrfSpec.disable());
+        return serverHttpSecurity.build();
+    }
+
+    private Converter<Jwt, Mono<AbstractAuthenticationToken>> grantedAuthoritiesExtractor() {
+        JwtAuthenticationConverter jwtAuthenticationConverter =
+                new JwtAuthenticationConverter();
+        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter
+                (new KeycloakRoleConverter());
+        return new ReactiveJwtAuthenticationConverterAdapter(jwtAuthenticationConverter);
+    }
+
+Yukarıdaki kodun açıklaması;
+
+* .pathMatchers(HttpMethod.GET).permitAll()
+→ Tüm GET isteklerine kimlik doğrulama olmadan izin verilir.
+
+* .pathMatchers("/meryilbank/accounts/**").hasRole("ACCOUNTS")
+→ Bu path’e gelen isteklerde ACCOUNTS rolü zorunlu.
+
+* Diğer iki satır da benzer şekilde CARDS ve LOANS rol kontrolü yapar.
+
+.oauth2ResourceServer(oAuth2ResourceServerSpec -> 
+    oAuth2ResourceServerSpec
+        .jwt(jwtSpec -> 
+            jwtSpec.jwtAuthenticationConverter(grantedAuthoritiesExtractor())
+        )
+)
+* Bu uygulama bir OAuth2 kaynak sunucusu (resource server) olarak çalışıyor.
+* JWT token'larını kullanarak kimlik doğrulaması yapıyor.
+* Token içerisindeki yetkiler (roller) özel bir converter (grantedAuthoritiesExtractor()) ile alınıyor.
+
+ CSRF Devre Dışı - serverHttpSecurity.csrf(csrfSpec -> csrfSpec.disable());
+* WebFlux uygulamalarında CSRF genellikle devre dışı bırakılır çünkü çoğu zaman sadece REST API sunulur (form işlemleri yapılmaz).
+
+grantedAuthoritiesExtractor() metodu;
+* JWT içindeki rolleri (authorities) almak için KeycloakRoleConverter sınıfı kullanılır.
+* Keycloak kullanıldığında roller genellikle "realm_access": { "roles": [...] } altında gelir. Spring bunu doğrudan anlayamaz.
+* Bu özel converter ile JWT içindeki rolleri Spring Security’ye uygun şekilde çıkarılır.
+* ReactiveJwtAuthenticationConverterAdapter adaptörü sayesinde bu yapı Reactive (Mono) tabanlı hale getirilir.
+
+
+Register client & end user inside KeyCloak for Authorization code grant flow;
+
+- Bu sefer end user kullanıcılarımız için bir client oluşturuyoruz. Bunun için keyclock admin panelinden clients menüsüne giriyoruz ve create client butonuna tıklıyoruz. Aşağıdaki bilgiler ile client oluşturuyoruz. 
+
+Client type : OpenID Connect
+Client ID : meryilbank-callcenter-ac (ac -> auth code)
+Name : MeryilBank Call Center UI App
+Description : MeryilBank Call Center UI App
+
+Client authentication : On
+Authentication flow : Standard flow (sadece)
+
+Valid redirect URIs : *
+Web origins : *
+
+- Ardından Users bölümünden user oluşturuyoruz.
+
+Email verified : On
+Username : merve
+Email : merve@gmail.com
+First name : Merve
+Last name : Yılmaz
+
+- Oluşturduğumuz kullanıcı için şifre kayıt edeceğiz. Bunun için credentials bölümünden set password alanından şifre oluşturuyoruz. (temporary - off)
+
+- Kullanıcı kayıt işlemleri için keyclock web sitesindeki rest api docs dan apilere ulaşabiliriz.
+https://www.keycloak.org/docs-api/latest/rest-api/index.html
