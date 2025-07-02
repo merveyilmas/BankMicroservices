@@ -57,7 +57,7 @@ services:
       service: network-deploy-service
 
   configserver:
-    image: "merveyilmas/configserver:s11"
+    image: "merveyilmas/configserver:s12"
     container_name: configserver-ms
     ports:
       - "8071:8071"
@@ -72,7 +72,7 @@ services:
       service: microservice-base-config
 
   eurekaserver:
-    image: "merveyilmas/eurekaserver:s11"
+    image: "merveyilmas/eurekaserver:s12"
     container_name: eurekaserver-ms
     ports:
       - "8070:8070"
@@ -92,7 +92,7 @@ services:
       SPRING_APPLICATION_NAME: "eurekaserver"
 
   accounts:
-    image: "merveyilmas/accounts:s11"
+    image: "merveyilmas/accounts:s12"
     container_name: accounts-ms
     healthcheck:
       test: "curl --fail --silent localhost:8080/actuator/health/readiness | grep UP || exit 1"
@@ -115,7 +115,7 @@ services:
       service: microservice-eureka-config
 
   loans:
-    image: "merveyilmas/loans:s11"
+    image: "merveyilmas/loans:s12"
     container_name: loans-ms
     healthcheck:
       test: "curl --fail --silent localhost:8090/actuator/health/readiness | grep UP || exit 1"
@@ -138,7 +138,7 @@ services:
       service: microservice-eureka-config
 
   cards:
-    image: "merveyilmas/cards:s11"
+    image: "merveyilmas/cards:s12"
     container_name: cards-ms
     healthcheck:
       test: "curl --fail --silent localhost:9000/actuator/health/readiness | grep UP || exit 1"
@@ -161,7 +161,7 @@ services:
       service: microservice-eureka-config
 
   gatewayserver:
-    image: "merveyilmas/gatewayserver:s11"
+    image: "merveyilmas/gatewayserver:s12"
     container_name: gatewayserver-ms
     ports:
       - "8072:8072"

@@ -2387,3 +2387,351 @@ Last name : Yılmaz
 
 - Kullanıcı kayıt işlemleri için keyclock web sitesindeki rest api docs dan apilere ulaşabiliriz.
 https://www.keycloak.org/docs-api/latest/rest-api/index.html
+
+
+
+Observability and Monitoring of Microservices
+
+Introduction to Observability And Monitoring Of Microservices;
+
+🔍 1. Observability (Gözlemlenebilirlik) Nedir?
+- Observability, bir sistemin içsel durumunu dışsal çıktılarından anlama yeteneğidir. Yani, sistemde bir problem olduğunda, sadece topladığınız verilerle "neden olduğunu anlayabiliyor musunuz?" sorusunun cevabıdır.
+
+3 Temel Pilları (Sinyal Türleri):
+
+📊 a. Metrics (Metrikler)
+- Sayısal verilerdir. Performansın izlenmesini sağlar.
+
+- Örnekler:
+*CPU kullanımı
+*Bellek kullanımı
+*HTTP istek sayısı
+*Ortalama yanıt süresi
+
+📝 b. Logs (Loglar)
+- Sistem olaylarının zaman damgalı kayıtlarıdır.
+- Hataların detaylarını analiz etmek için kullanılır.
+
+- Örnek:
+ERROR 500: NullPointerException at OrderService.java:42
+
+📈 c. Traces (İzler)
+- Bir isteğin sistemde izlediği yolun takibidir.
+- Özellikle dağıtık sistemlerde, bir isteğin hangi servislerden geçtiğini görmek için kullanılır.
+- Dağıtık izleme (Distributed Tracing) ile yapılır.
+
+
+📡 2. Monitoring (İzleme) Nedir?
+- Monitoring, sistemin durumunu sürekli izlemek ve anormallikler olduğunda uyarılar üretmek demektir. Bu, observability verilerinden yararlanarak yapılır.
+
+Monitoring’in amacı:
+- Canlı sistemin sağlıklı çalışıp çalışmadığını belirlemek.
+- Otomatik uyarılar oluşturmak (örneğin CPU %90’ı geçtiyse alarm gönder).
+- SLA (Service Level Agreement) ihlallerini önlemek.
+
+
+🔧 3. Mikroservislerde Observability Neden Zordur?
+- Her servis bağımsız olarak çalışır, kendi logunu ve metric’ini üretir.
+- Dağıtık sistemlerde bir isteğin farklı servislerden geçmesi izlemeyi zorlaştırır.
+- Network, latency, versiyon farkları gibi etkenler gözlemlenebilirliği etkiler.
+
+
+📦 4. Kullanılan Araçlar
+Katman		Popüler Araçlar
+Metrics		Prometheus, Micrometer, Grafana
+Logs		ELK Stack (Elasticsearch, Logstash, Kibana), Loki
+Tracing		Jaeger, Zipkin, OpenTelemetry
+Alerting	Prometheus Alertmanager, Grafana Alerting
+
+
+Introduction to managing logs with Grafana, Loki & Promtail;
+
+- Grafana, Loki ve Promtail birlikte kullanılarak modern, dağıtık log yönetimi yapılabilir. Bu kombinasyon, ELK stack'e göre daha hafif ve Kubernetes gibi ortamlarda daha az kaynak tüketerek centralized logging (merkezi loglama) sağlar.
+
+📦 Bileşenlere Genel Bakış
+
+🔸 read
+- Loki'nin read-only (okuma) bileşeni.
+- Sadece log sorgularını işler, log yazmaz.
+- Grafana logları buradan çeker.
+- Gateway üzerinden gelen sorguları işler.
+
+🔸 write
+- Loki'nin yazma bileşeni.
+- Uygulamalardan veya Alloy'dan gelen log verilerini alır.
+- Log verisini alır ve backend servisine iletir ya da doğrudan saklar.
+- Read ve write ayrımı ile ölçeklenebilir yapı kurulur.
+
+🔸 backend
+- Loki’nin veri yönetimini yapan merkezidir.
+- Logları alır, saklar, arama için indeks oluşturur.
+- write → backend → read zincirinin merkezidir.
+- Veri saklama, indeksleme ve replikasyon gibi görevleri vardır.
+
+🔸 gateway (Nginx)
+- Trafik yönlendiricidir (reverse proxy).
+- Gelen istekleri read ve write servislere yönlendirir:
+- Log yazma isteği → write
+- Log okuma/sorgu isteği → read
+- Grafana, uygulama veya Alloy bu gateway’e log gönderir veya log çeker.
+
+🔸 alloy
+- Log, metrik, trace toplayan ajan (eski adıyla grafana-agent).
+- Docker container loglarını toplar (/var/run/docker.sock ile).
+- Topladığı logları Loki’ye (gateway üzerinden) gönderir.
+- Metrikleri de Prometheus’a gönderebilir (ama bu compose'da yok).
+
+🔸 minio
+- S3 uyumlu nesne depolama sistemi.
+- Loki’nin logları sakladığı kalıcı depodur (örneğin: loki-data, loki-ruler klasörleri).
+- Yani Loki’nin yazdığı log verisi MinIO üzerinde dosya şeklinde tutulur.
+- MINIO_ROOT_USER ve MINIO_ROOT_PASSWORD ile erişim sağlanır.
+
+🔸 grafana
+- Görselleştirme ve dashboard aracı.
+- Datasource olarak Loki’yi kullanır (datasource.yml dosyasıyla tanımlı).
+- Kullanıcılar logları Grafana’dan sorgular, izler ve analiz eder.
+- Anonim erişim açık (GF_AUTH_ANONYMOUS_ENABLED=true).
+
+* Özet Mimari Akış:
+1. Alloy logları toplar.
+2. Logları gateway (Nginx) üzerinden Loki write servisine yollar.
+3. write → backend → logları işler ve MinIO'ya yazar.
+4. Kullanıcı Grafana üzerinden log sorgusu yapar → gateway → read → backend → sonuç Grafana’ya döner.
+
+
+ Implementing logging using Grafana, Loki & Alloy ;
+ 
+- İlk olarak projemizdeki "docker-compose" klasörünün altına "observability" ve onun altına ise "loki" isminde klasörlerimizi oluşturuyoruz.
+ 
+- Oluşturduğumuz "loki" klasörünün içerisine ise loki docs un bulunduğu grafana web sitesinden alacağımız "loki-config.yaml" dosyasını oluşturup içeriğini yapıştıryoruz.
+ (https://raw.githubusercontent.com/grafana/loki/main/examples/getting-started/loki-config.yaml)
+ 
+- Aynı işlemi "alloy" için de yapıyoruz.
+ (https://raw.githubusercontent.com/grafana/loki/main/examples/getting-started/alloy-local-config.yaml)
+ 
+- Aynı işlemi "grafana" için de yapıyoruz.
+ 
+- Daha sonra yine aynı sitedeki "docker-compose.yml" dosyasından aldığımız docker konfigürasyonlarını loki için olan kısmını alıp kendi docker-compose.yaml dosyamıza yapıştırıyoruz.
+
+- read ve write volume kısımlarını kendi proje yapımızagöre değiştirmeyi unutmuyoruz;
+(- ../observability/loki/loki-config.yaml:/etc/loki/config.yaml)
+
+- read > network kısmında kendi network ismimizi yazıyoruz. (meryilbank)
+
+services:
+  read:
+    image: grafana/loki:3.1.2
+    command: "-config.file=/etc/loki/config.yaml -target=read"
+    ports:
+      - 3101:3100
+      - 7946
+      - 9095
+    volumes:
+      - ../observability/loki/loki-config.yaml:/etc/loki/config.yaml
+    depends_on:
+      - minio
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: &loki-dns
+      meryilbank:
+        aliases:
+          - loki
+
+  write:
+    image: grafana/loki:3.1.2
+    command: "-config.file=/etc/loki/config.yaml -target=write"
+    ports:
+      - 3102:3100
+      - 7946
+      - 9095
+    volumes:
+      - ../observability/loki/loki-config.yaml:/etc/loki/config.yaml
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - minio
+    networks:
+      <<: *loki-dns
+      
+- Daha sonra yine web sitesindeki docker-compose.yaml dosyasındaki alloy konfigürasyonlarını kendi docker-compose.yaml dosyamıza ekliyoruz.
+
+- Volume ve network kısmını düzenliyoruz.
+(- ../observability/alloy/alloy-local-config.yaml:/etc/alloy/config.alloy:ro)
+(extends:
+      file: common-config.yml
+      service: network-deploy-service)
+
+  alloy:
+    image: grafana/alloy:v1.5.1
+    volumes:
+      - ../observability/alloy/alloy-local-config.yaml:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: run --server.http.listen-addr=0.0.0.0:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+    ports:
+      - 12345:12345
+    depends_on:
+      - gateway
+    extends:
+      file: common-config.yml
+      service: network-deploy-service
+      
+- Daha sonra aynı şekilde minio kpnfigürasyonlarını da netwrok bilgisini düzenleyerek ekliyoruz.
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        mkdir -p /data/loki-data && \
+        mkdir -p /data/loki-ruler && \
+        minio server /data
+    environment:
+      - MINIO_ROOT_USER=loki
+      - MINIO_ROOT_PASSWORD=supersecret
+      - MINIO_PROMETHEUS_AUTH_TYPE=public
+      - MINIO_UPDATE=off
+    ports:
+      - 9000
+    volumes:
+      - ./.data/minio:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 15s
+      timeout: 20s
+      retries: 5
+    extends:
+      file: common-config.yml
+      service: network-deploy-service
+          
+- Ardından "alloy" un bağımlı olduğu gateway, grafana ve backend konfigürasyonlarını da ekliyoruz.
+
+    grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    depends_on:
+      - gateway
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        /run.sh
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../observability/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    extends:
+      file: common-config.yml
+      service: network-deploy-service
+
+  backend:
+    image: grafana/loki:3.1.2
+    volumes:
+      - ../observability/loki/loki-config.yaml:/etc/loki/config.yaml
+    ports:
+      - "3100"
+      - "7946"
+    command: "-config.file=/etc/loki/config.yaml -target=backend -legacy-read-mode=false"
+    depends_on:
+      - gateway
+    extends:
+      file: common-config.yml
+      service: network-deploy-service
+
+  gateway:
+    image: nginx:1.27.3
+    depends_on:
+      - read
+      - write
+    entrypoint:
+      - sh
+      - -euc
+      - |
+        cat <<EOF > /etc/nginx/nginx.conf
+        user  nginx;
+        worker_processes  5;  ## Default: 1
+        
+        events {
+          worker_connections   1000;
+        }
+        
+        http {
+          resolver 127.0.0.11;
+        
+          server {
+            listen             3100;
+        
+            location = / {
+              return 200 'OK';
+              auth_basic off;
+            }
+        
+            location = /api/prom/push {
+              proxy_pass       http://write:3100\$$request_uri;
+            }
+        
+            location = /api/prom/tail {
+              proxy_pass       http://read:3100\$$request_uri;
+              proxy_set_header Upgrade \$$http_upgrade;
+              proxy_set_header Connection "upgrade";
+            }
+        
+            location ~ /api/prom/.* {
+              proxy_pass       http://read:3100\$$request_uri;
+            }
+        
+            location = /loki/api/v1/push {
+              proxy_pass       http://write:3100\$$request_uri;
+            }
+        
+            location = /loki/api/v1/tail {
+              proxy_pass       http://read:3100\$$request_uri;
+              proxy_set_header Upgrade \$$http_upgrade;
+              proxy_set_header Connection "upgrade";
+            }
+        
+            location ~ /loki/api/.* {
+              proxy_pass       http://read:3100\$$request_uri;
+            }
+          }
+        }
+        EOF
+        /docker-entrypoint.sh nginx -g "daemon off;"
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: [ "CMD", "service", "nginx", "status" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    extends:
+      file: common-config.yml
+      service: network-deploy-service
+      
+- Son olarak ise docker-compose.yml dosyasını çalıştırarak tüm projeleri atağa kaldırırız.
+
+Grafana arayüzüne ise aşağıdaki linkten ulaşabiliriz;
+http://localhost:3000/
+
+!Not:
+- docker-compose.yml dosyasındaki minio konfigürasyonlarındaki volume ayarı sayesinde loglar lokalimizde prod/.data klasöründe de kaydolur. 
+(    volumes:
+      - ./.data/minio:/data)
+      
+      
+ Managing metrics & monitoring with Actuator, Micrometer, Prometheus & Grafana;
